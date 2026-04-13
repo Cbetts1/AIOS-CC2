@@ -223,17 +223,32 @@
 
   function handleMenuCommand(cmd, name) {
     appendConsole(`> CMD ${cmd} : ${name || ""}`, "cmd");
-    // Build display based on local data
     const top = cmd.split(".")[0];
     const sub = cmd.split(".")[1];
-    const data = state.status;
 
     if (!sub) {
       appendConsole(`  [${name}] Sub-menu opened.`, "info");
       return;
     }
 
-    displayCommandResult(top, sub, name, data);
+    // Always POST to the backend for real results
+    fetch("/api/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cmd }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          appendConsole(`  [ERROR] ${data.error}`, "err");
+        } else {
+          const lines = (data.result || "").split("\n");
+          lines.forEach(l => { if (l.trim()) appendConsole(l, "ok"); });
+        }
+      })
+      .catch(err => {
+        appendConsole(`  [offline] ${err.message}`, "warn");
+      });
   }
 
   function displayCommandResult(top, sub, name, data) {

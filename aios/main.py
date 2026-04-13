@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Ensure the project root (parent of the aios/ package) is in the Python path
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +46,7 @@ def parse_args():
 
 def boot_subsystems():
     """Initialize all subsystems in order."""
+    import os
     from aios.core.state_registry import StateRegistry
     from aios.core.policy_engine import PolicyEngine
     from aios.core.security_kernel import SecurityKernel
@@ -64,8 +66,12 @@ def boot_subsystems():
     from aios.procwriters.proc_writers import ProcWriters
     from aios.sandbox.sandbox import Sandbox
 
+    # Base persistence directory
+    _persist_base = os.path.join(os.path.expanduser("~"), ".aios")
+
     print("  [1/14] StateRegistry ...")
     state = StateRegistry()
+    state.set_persist_path(os.path.join(_persist_base, "state.json"))
 
     print("  [2/14] PolicyEngine ...")
     policy = PolicyEngine()
@@ -78,6 +84,14 @@ def boot_subsystems():
     identity.load()
     print(f"         Operator: {identity.get_operator()} | Level: {identity.get_level()}")
 
+    # Authenticate the security kernel using the identity lock file
+    _identity_lock_path = str(Path(__file__).parent / "identity" / "identity.lock")
+    try:
+        _auth_token = security.authenticate(_identity_lock_path)
+        print(f"         SecurityKernel authenticated (token: {_auth_token[:12]}...)")
+    except Exception as _auth_exc:
+        print(f"         WARNING: SecurityKernel auth failed: {_auth_exc}")
+
     print("  [5/14] MemoryMapController ...")
     memory = MemoryMapController()
     memory.allocate("kernel", 4096)
@@ -88,7 +102,7 @@ def boot_subsystems():
     print("  [6/14] Virtual Hardware ...")
     vcpu = VirtualCPU()
     vmem = VirtualMemory()
-    vstorage = VirtualStorage()
+    vstorage = VirtualStorage(persist_dir=os.path.join(_persist_base, "vstorage"))
     vnet = VirtualNetwork()
     vnet.create_interface("lo0")
     vnet.create_interface("eth0")
@@ -117,6 +131,13 @@ def boot_subsystems():
     print("  [11/14] ProcessSupervisor ...")
     supervisor = ProcessSupervisor()
 
+    # Register a coroutine factory that properly activates and runs the heartbeat
+    async def _heartbeat_runner():
+        heartbeat.activate()
+        await heartbeat._run()
+
+    supervisor.register("heartbeat", _heartbeat_runner)
+
     print("  [12/14] ProcWriters ...")
     proc_writers = ProcWriters(vstorage=vstorage)
 
@@ -131,6 +152,12 @@ def boot_subsystems():
     from aios.cloud.cloud_loop import CloudLoop
     cloud = CloudController(state_registry=state, mesh=mesh, vcpu=vcpu)
     cloud.boot()
+    # Auto-spawn one worker node so the cloud is immediately operational
+    _spawn = cloud.spawn_node()
+    if "error" not in _spawn:
+        print(f"         Auto-spawned cloud node: {_spawn.get('node_id')} on port {_spawn.get('port')}")
+    else:
+        print(f"         WARNING: Could not auto-spawn cloud node: {_spawn.get('error')}")
     cloud_loop = CloudLoop(cloud_controller=cloud, mesh=mesh)
 
     cc.attach(
@@ -278,10 +305,14 @@ def endless_loop(subsystems, stop_event):
 
 
 def run_async_mesh(subsystems):
-    """Start mesh and heartbeat in an asyncio loop."""
+    """Start mesh and heartbeat in an asyncio loop, with ProcessSupervisor tracking."""
     async def _run():
-        heartbeat = subsystems["heartbeat"]
-        heartbeat.start()
+        supervisor = subsystems.get("supervisor")
+        if supervisor:
+            # supervisor.start_all() includes the heartbeat_runner which sets _running=True
+            await supervisor.start_all()
+        else:
+            subsystems["heartbeat"].start()
         while subsystems["cc"]._running:
             await asyncio.sleep(1)
 

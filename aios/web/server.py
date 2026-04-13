@@ -1,7 +1,5 @@
 """AI-OS Web Server - HTTP server on port 1313 serving web UI."""
 import json
-import os
-import socket
 import threading
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -34,9 +32,6 @@ class AIWebHandler(SimpleHTTPRequestHandler):
         elif self.path == "/api/heartbeat":
             self._serve_heartbeat()
         else:
-            # Serve static files from web directory
-            if self._web_dir:
-                os.chdir(self._web_dir)
             super().do_GET()
 
     def do_POST(self):
