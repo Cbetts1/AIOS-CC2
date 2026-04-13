@@ -20,7 +20,7 @@ class IdentityLock:
         candidates = [
             Path(__file__).parent.parent / "identity" / "identity.lock",
             Path("aios/identity/identity.lock"),
-            Path("/home/runner/work/AIOS-CC2/AIOS-CC2/aios/identity/identity.lock"),
+            Path("identity/identity.lock"),
         ]
         for c in candidates:
             if c.exists():

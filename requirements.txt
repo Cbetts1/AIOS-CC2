@@ -1,0 +1,15 @@
+# AI-OS CC2 — Python Requirements
+#
+# This project uses ONLY the Python standard library.
+# No third-party packages need to be installed.
+#
+# Minimum Python version: 3.8
+# Recommended:            3.10+
+#
+# Standard library modules used:
+#   asyncio, curses, threading, http.server, hashlib, hmac,
+#   json, platform, os, sys, time, datetime, random, pathlib,
+#   multiprocessing, argparse
+#
+# Optional (for development / testing):
+# pytest>=7.0       # run: pip install pytest
