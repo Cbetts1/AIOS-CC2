@@ -85,5 +85,5 @@ class HeartbeatSystem:
             "last_beat_ts": self._last_beat_ts,
             "interval_seconds": self.INTERVAL,
             "uptime_seconds": round(time.time() - self._init_time, 1),
-            "healthy": self._running,
+            "healthy": self._running or self._beat_count > 0,
         }

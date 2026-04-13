@@ -9,7 +9,6 @@ This module runs in its own daemon thread and performs four duties every tick:
 
 The loop only stops when stop() is called (e.g. during operator shutdown).
 """
-import asyncio
 import threading
 import time
 from datetime import datetime, timezone
@@ -108,7 +107,8 @@ class CloudLoop:
         if self._mesh is None or self._controller is None:
             return
         try:
-            node_count = len(self._controller._nodes)
+            with self._controller._lock:
+                node_count = len(self._controller._nodes)
             running = self._controller._running
             payload = {
                 "type": "cloud_sync",
@@ -116,10 +116,8 @@ class CloudLoop:
                 "cloud_running": running,
                 "ts": datetime.now(timezone.utc).isoformat(),
             }
-            # NodeMesh.broadcast is a coroutine; spin up a minimal event loop
-            loop = asyncio.new_event_loop()
-            loop.run_until_complete(self._mesh.broadcast(payload))
-            loop.close()
+            # Use synchronous broadcast to avoid spinning up a new event loop
+            self._mesh.broadcast_sync(payload)
         except Exception:
             pass
 
