@@ -55,9 +55,15 @@ class CommandCenter:
             "5": "Sandbox Status",
         }),
         "7": ("Cloud Systems", {
-            "1": "Cloud Layer Status",
-            "2": "Virtual Cloud Nodes",
-            "3": "Cloud Bridge Report",
+            "1": "Cloud Status",
+            "2": "List Nodes",
+            "3": "Start Cloud",
+            "4": "Stop Cloud",
+            "5": "Spawn Node",
+            "6": "Execute Task (echo)",
+            "7": "Cloud Heartbeat",
+            "8": "Cloud Storage Info",
+            "9": "Cloud Event Log",
         }),
         "8": ("Cellular Systems", {
             "1": "Virtual Cellular Status",
@@ -135,6 +141,7 @@ class CommandCenter:
         self._supervisor = None
         self._proc_writers = None
         self._sandbox = None
+        self._cloud = None
         self._console_log = []
 
     def attach(self, **kwargs) -> None:
@@ -227,6 +234,7 @@ class CommandCenter:
             "heartbeat": self._heartbeat,
             "aura": self._aura,
             "supervisor": self._supervisor,
+            "cloud": self._cloud,
         }
         for name, comp in components.items():
             if comp and hasattr(comp, "status"):
@@ -238,6 +246,12 @@ class CommandCenter:
 
     def handle_command(self, cmd: str) -> str:
         cmd = cmd.strip()
+
+        # ── Plain-text cloud commands (cloud start / stop / status / etc.) ──
+        lower = cmd.lower()
+        if lower.startswith("cloud"):
+            return self._handle_cloud_text(cmd)
+
         parts = cmd.split(".")
         top = parts[0] if parts else ""
         sub = parts[1] if len(parts) > 1 else ""
@@ -262,6 +276,36 @@ class CommandCenter:
         if hasattr(self, handler):
             return getattr(self, handler)()
         return self._generic_handler(top, sub)
+
+    def _handle_cloud_text(self, cmd: str) -> str:
+        """Dispatch plain-text cloud commands from terminal / web input."""
+        parts = cmd.lower().split()
+        sub = parts[1] if len(parts) > 1 else ""
+        arg = parts[2] if len(parts) > 2 else ""
+
+        if sub in ("start",):
+            return self._cloud_start()
+        if sub in ("stop",):
+            return self._cloud_stop()
+        if sub in ("status", ""):
+            return self._cloud_status()
+        if sub in ("nodes", "list"):
+            return self._cloud_nodes()
+        if sub in ("spawn",):
+            node_id = arg or None
+            return self._cloud_spawn(node_id)
+        if sub in ("exec", "execute"):
+            payload = parts[2:] or ["ping"]
+            return self._cloud_exec(" ".join(payload))
+        if sub in ("heartbeat", "hb"):
+            return self._cloud_heartbeat()
+        if sub in ("log",):
+            return self._cloud_event_log()
+        return (
+            f"  Unknown cloud sub-command: '{sub}'\n"
+            "  Available: start, stop, status, nodes, spawn [id], "
+            "exec [payload], heartbeat, log"
+        )
 
     def _generic_handler(self, top: str, sub: str) -> str:
         menu_name = self.MENU.get(top, ("Unknown",))[0]
@@ -372,6 +416,26 @@ class CommandCenter:
                 for k, v in st.items():
                     lines.append(f"  {k}: {v}")
 
+        # Cloud Systems (menu 7)
+        elif top == "7":
+            if sub == "1":
+                lines += self._cloud_status_lines()
+            elif sub == "2":
+                lines += self._cloud_nodes_lines()
+            elif sub == "3":
+                lines.append(self._cloud_start())
+            elif sub == "4":
+                lines.append(self._cloud_stop())
+            elif sub == "5":
+                lines.append(self._cloud_spawn())
+            elif sub == "6":
+                lines.append(self._cloud_exec("echo"))
+            elif sub == "7":
+                lines.append(self._cloud_heartbeat())
+            elif sub == "8":
+                lines += self._cloud_storage_lines()
+            elif sub == "9":
+                lines += self._cloud_log_lines()
         # Cloud Systems
         elif top == "7":
             if sub == "1":
@@ -629,6 +693,130 @@ class CommandCenter:
 
         lines.append("")
         return "\n".join(lines)
+
+    # ── Cloud helper methods ─────────────────────────────────────────────────
+
+    def _cloud_start(self) -> str:
+        if not self._cloud:
+            return "  Cloud layer not initialised."
+        result = self._cloud.boot()
+        self._log("CMD: cloud start")
+        return f"  Cloud: {result.get('status', 'UNKNOWN')} (boot_time: {result.get('boot_time', '?')})"
+
+    def _cloud_stop(self) -> str:
+        if not self._cloud:
+            return "  Cloud layer not initialised."
+        result = self._cloud.stop()
+        self._log("CMD: cloud stop")
+        return f"  Cloud: {result.get('status', 'UNKNOWN')}"
+
+    def _cloud_status(self) -> str:
+        lines = self._cloud_status_lines()
+        return "\n".join(lines)
+
+    def _cloud_status_lines(self) -> list:
+        lines = []
+        if not self._cloud:
+            lines.append("  Cloud layer not initialised.")
+            return lines
+        st = self._cloud.status()
+        lines.append(f"  Running     : {st.get('running', False)}")
+        lines.append(f"  Nodes       : {st.get('node_count', 0)}")
+        lines.append(f"  Uptime      : {st.get('uptime_seconds', 0)}s")
+        lines.append(f"  Tick count  : {st.get('tick_count', 0)}")
+        net = st.get("network", {})
+        lines.append(f"  Net ports   : {net.get('allocated_ports', 0)} allocated "
+                     f"({net.get('port_range', '?')})")
+        lines.append(f"  Msgs sent   : {net.get('messages_sent', 0)}")
+        cmp = st.get("compute", {})
+        lines.append(f"  Tasks run   : {cmp.get('task_count', 0)}")
+        return lines
+
+    def _cloud_nodes(self) -> str:
+        lines = self._cloud_nodes_lines()
+        return "\n".join(lines)
+
+    def _cloud_nodes_lines(self) -> list:
+        lines = []
+        if not self._cloud:
+            lines.append("  Cloud layer not initialised.")
+            return lines
+        nodes = self._cloud.list_nodes()
+        if not nodes:
+            lines.append("  No cloud nodes active.")
+            return lines
+        for n in nodes:
+            status_sym = "●" if n.get("running") else "○"
+            lines.append(
+                f"  {status_sym} {n['node_id']:<20} port={n.get('port','?'):<6} "
+                f"tasks={n.get('task_count',0):<5} uptime={n.get('uptime_seconds',0)}s"
+            )
+        return lines
+
+    def _cloud_spawn(self, node_id: str = None) -> str:
+        if not self._cloud:
+            return "  Cloud layer not initialised."
+        if not self._cloud._running:
+            return "  Cloud not started.  Run: cloud start"
+        result = self._cloud.spawn_node(node_id)
+        self._log(f"CMD: cloud spawn -> {result}")
+        if "error" in result:
+            return f"  ERROR: {result['error']}"
+        return (f"  Spawned node {result['node_id']} on port {result['port']} "
+                f"— {result['status']}")
+
+    def _cloud_exec(self, payload_str: str = "echo") -> str:
+        if not self._cloud:
+            return "  Cloud layer not initialised."
+        if not self._cloud._running:
+            return "  Cloud not started.  Run: cloud start"
+        result = self._cloud.exec_task("echo", {"msg": payload_str})
+        self._log(f"CMD: cloud exec")
+        if "error" in result:
+            return f"  ERROR: {result['error']}"
+        return (f"  Task {result.get('task_id','?')} → {result.get('status','?')} "
+                f"on {result.get('node_id', 'local')}")
+
+    def _cloud_heartbeat(self) -> str:
+        if not self._cloud:
+            return "  Cloud layer not initialised."
+        result = self._cloud.heartbeat()
+        self._log("CMD: cloud heartbeat")
+        alive = result.get("alive", 0)
+        total = result.get("total", 0)
+        return f"  Heartbeat: {alive}/{total} nodes alive"
+
+    def _cloud_storage_lines(self) -> list:
+        lines = []
+        if not self._cloud:
+            lines.append("  Cloud layer not initialised.")
+            return lines
+        st = self._cloud.status().get("storage", {})
+        lines.append(f"  Storage dir : {st.get('storage_dir', '?')}")
+        lines.append(f"  Namespaces  : {st.get('namespaces', 0)}")
+        lines.append(f"  Total keys  : {st.get('total_keys', 0)}")
+        lines.append(f"  Writes      : {st.get('write_count', 0)}")
+        lines.append(f"  Reads       : {st.get('read_count', 0)}")
+        return lines
+
+    def _cloud_event_log(self) -> str:
+        lines = self._cloud_log_lines()
+        return "\n".join(lines)
+
+    def _cloud_log_lines(self, limit: int = 15) -> list:
+        lines = []
+        if not self._cloud:
+            lines.append("  Cloud layer not initialised.")
+            return lines
+        log = self._cloud.get_event_log(limit)
+        if not log:
+            lines.append("  No cloud events recorded yet.")
+            return lines
+        for entry in log:
+            lines.append(f"  [{entry.get('ts','')[:19]}] {entry.get('msg','')}")
+        return lines
+
+    # ── Shutdown ─────────────────────────────────────────────────────────────
 
     def shutdown(self, token: str) -> str:
         if self._identity:
