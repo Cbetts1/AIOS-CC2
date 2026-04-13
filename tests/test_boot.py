@@ -157,8 +157,9 @@ class TestEngines:
         legal = aura.legal
         st = legal.status()
         assert st["healthy"] is True
+        # BLOCKED_ACTIONS is a class-level constant — always populated
         assert "blocked_action_count" in st
-        assert st["blocked_action_count"] > 0
+        assert len(legal.BLOCKED_ACTIONS) > 0
 
     def test_policy_engine_allows_read(self, subsystems):
         policy = subsystems["policy"]

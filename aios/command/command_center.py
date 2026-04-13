@@ -156,7 +156,9 @@ class CommandCenter:
         self._trace_file = path
         # Write a header line so the file is clearly identified
         try:
-            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            parent = os.path.dirname(os.path.abspath(path))
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             with open(path, "a", encoding="utf-8") as fh:
                 fh.write(
                     f"# AI-OS CC2 TRACE LOG — started {datetime.now(timezone.utc).isoformat()}\n"

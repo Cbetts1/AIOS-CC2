@@ -23,7 +23,7 @@ for _p in (_here, os.path.join(_here, "aios")):
         sys.path.insert(0, _p)
 
 
-def _parse_args():
+def parse_args():
     p = argparse.ArgumentParser(description="AI-OS CC2 health check")
     p.add_argument("--verbose", "-v", action="store_true", help="Detailed output")
     p.add_argument("--json", action="store_true", help="JSON output")
@@ -183,5 +183,5 @@ def run_health_check(verbose: bool = False, json_output: bool = False):
 
 
 if __name__ == "__main__":
-    args = _parse_args()
+    args = parse_args()
     sys.exit(run_health_check(verbose=args.verbose, json_output=args.json))

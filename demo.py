@@ -45,7 +45,7 @@ BANNER = r"""
 """
 
 
-def _parse_args():
+def parse_args():
     p = argparse.ArgumentParser(description="AI-OS CC2 live demo")
     p.add_argument("--fast", action="store_true", help="No pauses between steps")
     p.add_argument("--trace", action="store_true", help="Write demo trace to demo_trace.log")
@@ -134,5 +134,5 @@ def run_demo(fast: bool = False, trace: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    args = _parse_args()
+    args = parse_args()
     sys.exit(run_demo(fast=args.fast, trace=args.trace))
