@@ -145,8 +145,10 @@ class TerminalUI:
         if key == ord('q') or key == ord('Q'):
             return False
         elif key == curses.KEY_UP:
+            self._input_buffer = ""  # clear typed buffer when navigating menu
             self._selected_menu = max(0, self._selected_menu - 1)
         elif key == curses.KEY_DOWN:
+            self._input_buffer = ""  # clear typed buffer when navigating menu
             self._selected_menu = min(len(self._menu_items) - 1, self._selected_menu + 1)
         elif key == curses.KEY_ENTER or key == 10 or key == 13:
             # If the user has typed something in the buffer, submit that

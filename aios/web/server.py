@@ -36,8 +36,7 @@ class AIWebHandler(SimpleHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length) if length > 0 else b"{}"
-            import json as _json
-            payload = _json.loads(body.decode("utf-8"))
+            payload = json.loads(body.decode("utf-8"))
             cmd = str(payload.get("cmd", "")).strip()
             if not cmd:
                 result_text = "No command provided. Enter a menu number like 1, 1.1, or 11.1"
@@ -45,7 +44,7 @@ class AIWebHandler(SimpleHTTPRequestHandler):
                 result_text = self._command_center.handle_command(cmd)
             else:
                 result_text = f"Command received: {cmd} (CommandCenter not attached)"
-            resp = _json.dumps({"result": result_text, "cmd": cmd}).encode("utf-8")
+            resp = json.dumps({"result": result_text, "cmd": cmd}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(resp)))
