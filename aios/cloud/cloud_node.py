@@ -10,7 +10,7 @@ Each CloudNode:
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aios.cloud.cloud_network import CloudNetwork, recv_message, send_message
 import socket
@@ -121,7 +121,7 @@ class CloudNode:
         mtype = msg.get("type", "unknown")
         if mtype == "ping":
             return {"type": "pong", "node_id": self._id,
-                    "ts": datetime.utcnow().isoformat() + "Z"}
+                    "ts": datetime.now(timezone.utc).isoformat()}
         if mtype == "heartbeat":
             return {
                 "type": "heartbeat_ack",
@@ -129,7 +129,7 @@ class CloudNode:
                 "status": self._node_status,
                 "task_count": self._task_count,
                 "uptime_seconds": self.uptime(),
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
             }
         if mtype == "status":
             return self.status()
@@ -155,7 +155,7 @@ class CloudNode:
                 "status": "complete",
                 "result": result,
                 "node_id": self._id,
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as exc:
             with self._lock:
@@ -166,7 +166,7 @@ class CloudNode:
                 "status": "error",
                 "error": str(exc),
                 "node_id": self._id,
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
             }
 
     def _execute(self, task_type: str, task: dict):

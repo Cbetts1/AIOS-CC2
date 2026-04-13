@@ -1,5 +1,5 @@
 """AI-OS Policy Engine - Permission and access control."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class PolicyViolation(Exception):
@@ -65,7 +65,7 @@ class PolicyEngine:
         identity_level = self._get_identity_level(identity)
         allowed = self.check_permission(action, identity_level, identity)
         event = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": action,
             "identity": identity.get("name", "unknown"),
             "level": self.LEVEL_NAMES.get(identity_level, "UNKNOWN"),

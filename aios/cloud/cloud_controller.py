@@ -10,7 +10,7 @@ Responsibilities:
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aios.cloud.cloud_network import CloudNetwork
 from aios.cloud.cloud_node import CloudNode
@@ -52,7 +52,7 @@ class CloudController:
             self._state.set("cloud_boot_time", self._boot_time, namespace="cloud")
         return {
             "status": "ONLINE",
-            "boot_time": datetime.utcnow().isoformat() + "Z",
+            "boot_time": datetime.now(timezone.utc).isoformat(),
         }
 
     def stop(self) -> dict:
@@ -96,7 +96,7 @@ class CloudController:
         self._network.register_node(nid, port)
         self._storage.set(nid, {
             "port": port,
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }, namespace="nodes")
 
         if self._state:
@@ -144,7 +144,7 @@ class CloudController:
 
     def heartbeat(self) -> dict:
         """Ping all registered nodes and summarise results."""
-        msg = {"type": "heartbeat", "ts": datetime.utcnow().isoformat() + "Z"}
+        msg = {"type": "heartbeat", "ts": datetime.now(timezone.utc).isoformat()}
         results = self._network.broadcast(msg)
         alive = sum(1 for r in results.values() if "error" not in r)
         total = len(results)
@@ -165,7 +165,7 @@ class CloudController:
     # ── Logging ──────────────────────────────────────────────────────────────
 
     def _log(self, msg: str) -> None:
-        entry = {"msg": msg, "ts": datetime.utcnow().isoformat() + "Z"}
+        entry = {"msg": msg, "ts": datetime.now(timezone.utc).isoformat()}
         self._event_log.append(entry)
         if len(self._event_log) > 300:
             self._event_log = self._event_log[-150:]

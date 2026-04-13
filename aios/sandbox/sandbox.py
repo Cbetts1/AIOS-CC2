@@ -1,7 +1,7 @@
 """AI-OS Sandbox - Enforces no external calls during execution."""
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SandboxViolation(Exception):
@@ -47,7 +47,7 @@ class Sandbox:
             self._execution_log.append({
                 "fn": getattr(fn, "__qualname__", str(fn)),
                 "status": "ok",
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
             })
             return result
         except SandboxViolation:
@@ -56,7 +56,7 @@ class Sandbox:
             self._execution_log.append({
                 "fn": getattr(fn, "__qualname__", str(fn)),
                 "status": f"error:{type(exc).__name__}",
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
             })
             raise
         finally:

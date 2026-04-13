@@ -1,6 +1,6 @@
 """AI-OS APK UI Blueprint - Operator and Chat mode layouts."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class APKUIMain:
@@ -21,7 +21,7 @@ class APKUIMain:
                 "top_bar": {
                     "title": "AI-OS Command Center",
                     "status_indicator": "ONLINE",
-                    "clock": datetime.utcnow().isoformat() + "Z",
+                    "clock": datetime.now(timezone.utc).isoformat(),
                 },
                 "left_panel": {
                     "type": "slide-in",
@@ -74,7 +74,7 @@ class APKUIMain:
     def handle_gesture(self, gesture: str) -> dict:
         result = {
             "gesture": gesture,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": "none",
         }
         gesture_actions = {

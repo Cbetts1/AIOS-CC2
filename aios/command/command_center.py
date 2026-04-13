@@ -168,7 +168,7 @@ class CommandCenter:
     def _log(self, msg: str) -> None:
         entry = {
             "msg": msg,
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat(),
             "time": time.time(),
         }
         self._console_log.append(entry)
@@ -216,7 +216,7 @@ class CommandCenter:
             "uptime_seconds": round(time.time() - self._boot_time, 1) if self._boot_time else 0,
             "boot_time": self._boot_time,
             "running": self._running,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         components = {
             "state": self._state,
@@ -689,7 +689,7 @@ class CommandCenter:
 
         if len(lines) == 2:
             lines.append(f"  {sub_name}: OPERATIONAL")
-            lines.append(f"  Timestamp: {datetime.utcnow().isoformat()}Z")
+            lines.append(f"  Timestamp: {datetime.now(timezone.utc).isoformat()}")
 
         lines.append("")
         return "\n".join(lines)

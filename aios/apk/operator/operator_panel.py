@@ -1,6 +1,6 @@
 """AI-OS APK Operator Panel - Dashboard for operator mode."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class OperatorPanel:
@@ -15,7 +15,7 @@ class OperatorPanel:
             "action": "open",
             "panel": "operator",
             "animation": "slide_in_left",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def close(self) -> dict:
@@ -24,7 +24,7 @@ class OperatorPanel:
             "action": "close",
             "panel": "operator",
             "animation": "slide_out_left",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_menu(self) -> list:

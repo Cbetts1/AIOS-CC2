@@ -1,6 +1,6 @@
 """AI-OS Virtual Storage - Simulates a 1GB virtual disk."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class VirtualStorage:
@@ -25,7 +25,7 @@ class VirtualStorage:
             raise IOError(f"Virtual disk full: cannot write {new_size} bytes to '{path}'")
         self._store[path] = bytes(data)
         self._used_bytes += delta
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat()
         if path not in self._metadata:
             self._metadata[path] = {"created": now, "modified": now, "size": new_size}
         else:

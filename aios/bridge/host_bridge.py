@@ -1,6 +1,6 @@
 """AI-OS Host Bridge - Aggregates all bridge components."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aios.bridge.resource_translator import ResourceTranslator
 from aios.bridge.permission_container import PermissionContainer
@@ -24,7 +24,7 @@ class HostBridge:
         self.sandbox.enter_sandbox()
         return {
             "status": "ONLINE",
-            "boot_time": datetime.utcnow().isoformat() + "Z",
+            "boot_time": datetime.now(timezone.utc).isoformat(),
             "host_os": caps.get("os_name", "unknown"),
             "cpu_count": caps.get("cpu_count", 0),
             "sandboxed": self.sandbox.is_sandboxed(),

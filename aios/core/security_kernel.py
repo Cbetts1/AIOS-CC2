@@ -4,7 +4,7 @@ import hmac
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -78,7 +78,7 @@ class SecurityKernel:
         return True
 
     def log_security_event(self, event: dict) -> None:
-        event["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        event["timestamp"] = datetime.now(timezone.utc).isoformat()
         self._security_log.append(event)
         if len(self._security_log) > 2000:
             self._security_log = self._security_log[-1000:]

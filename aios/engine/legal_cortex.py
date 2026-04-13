@@ -1,6 +1,6 @@
 """AI-OS Legal Cortex - Compliance and legal enforcement."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class LegalViolation(Exception):
@@ -48,7 +48,7 @@ class LegalCortex:
                 "action": action,
                 "result": "BLOCKED",
                 "reason": "Non-compliant action - permanently blocked by LegalCortex",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             self._violations.append(event)
             if self._state:
@@ -64,7 +64,7 @@ class LegalCortex:
             "audit_required": requires_audit,
             "blocked": blocked,
             "compliant": not blocked,
-            "audited_at": datetime.utcnow().isoformat() + "Z",
+            "audited_at": datetime.now(timezone.utc).isoformat(),
             "tick": self._tick_count,
         }
         self._audit_log.append(record)

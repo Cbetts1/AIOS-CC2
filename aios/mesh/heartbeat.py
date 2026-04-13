@@ -1,7 +1,7 @@
 """AI-OS Heartbeat System - Sends periodic heartbeats via NodeMesh."""
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class HeartbeatSystem:
@@ -41,7 +41,7 @@ class HeartbeatSystem:
     async def beat(self) -> dict:
         self._beat_count += 1
         self._last_beat_time = time.time()
-        self._last_beat_ts = datetime.utcnow().isoformat() + "Z"
+        self._last_beat_ts = datetime.now(timezone.utc).isoformat()
         pulse = {
             "type": "heartbeat",
             "beat": self._beat_count,
@@ -59,7 +59,7 @@ class HeartbeatSystem:
         """Thread-safe synchronous heartbeat tick (no async mesh broadcast)."""
         self._beat_count += 1
         self._last_beat_time = time.time()
-        self._last_beat_ts = datetime.utcnow().isoformat() + "Z"
+        self._last_beat_ts = datetime.now(timezone.utc).isoformat()
         return {
             "type": "heartbeat",
             "beat": self._beat_count,

@@ -2,7 +2,7 @@
 import json
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
@@ -76,7 +76,7 @@ class AIWebHandler(SimpleHTTPRequestHandler):
                     "status": "ONLINE",
                     "version": "2.0.0-CC2",
                     "operator": "Chris",
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "layers": {str(i): "ONLINE" for i in range(1, 8)},
                 }
             body = json.dumps(data, default=str).encode("utf-8")
@@ -97,7 +97,7 @@ class AIWebHandler(SimpleHTTPRequestHandler):
     def _serve_heartbeat(self):
         data = {
             "alive": True,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         if self._command_center and self._command_center._heartbeat:
             data.update(self._command_center._heartbeat.last_beat())
@@ -119,6 +119,10 @@ class AIWebHandler(SimpleHTTPRequestHandler):
         return super().translate_path(path)
 
 
+class _ReusingHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
+
 class AIWebServer:
     PORT = 1313
 
@@ -133,7 +137,7 @@ class AIWebServer:
         AIWebHandler._command_center = self._cc
         AIWebHandler._web_dir = self._web_dir
 
-        self._server = HTTPServer(("0.0.0.0", self.PORT), AIWebHandler)
+        self._server = _ReusingHTTPServer(("0.0.0.0", self.PORT), AIWebHandler)
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()

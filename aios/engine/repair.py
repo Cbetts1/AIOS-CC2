@@ -1,6 +1,6 @@
 """AI-OS Repair Engine - Auto-diagnoses and repairs faults."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class RepairEngine:
@@ -36,7 +36,7 @@ class RepairEngine:
         diag = self.diagnose(component)
         result = {
             "component": component,
-            "repaired_at": datetime.utcnow().isoformat() + "Z",
+            "repaired_at": datetime.now(timezone.utc).isoformat(),
             "diagnosis": diag,
             "action": "state_reset" if diag["fault_detected"] else "no_action",
             "success": True,
@@ -60,7 +60,7 @@ class RepairEngine:
         return {
             "component": component,
             "fault_detected": fault,
-            "diagnosed_at": datetime.utcnow().isoformat() + "Z",
+            "diagnosed_at": datetime.now(timezone.utc).isoformat(),
             "indicators_checked": self.FAULT_INDICATORS,
         }
 

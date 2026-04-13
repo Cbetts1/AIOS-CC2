@@ -1,6 +1,6 @@
 """AI-OS Proc Writers - Writes system state to /proc-like virtual files."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ProcWriters:
@@ -24,7 +24,7 @@ class ProcWriters:
     def _write_system_procs(self) -> None:
         self.write_proc("uptime", str(round(time.time(), 2)))
         self.write_proc("tick", str(self._tick_count))
-        self.write_proc("timestamp", datetime.utcnow().isoformat() + "Z")
+        self.write_proc("timestamp", datetime.now(timezone.utc).isoformat())
         self.write_proc("status", "ONLINE")
 
     def write_proc(self, name: str, data) -> str:

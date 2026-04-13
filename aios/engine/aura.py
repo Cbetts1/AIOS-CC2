@@ -1,6 +1,6 @@
 """AI-OS Aura Engine - Master orchestrator of all sub-engines."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aios.engine.builder import BuilderEngine
 from aios.engine.repair import RepairEngine
@@ -37,7 +37,7 @@ class AuraEngine:
             self._state.set("aura_status", "ONLINE", namespace="aura")
         return {
             "status": "ONLINE",
-            "boot_time": datetime.utcnow().isoformat() + "Z",
+            "boot_time": datetime.now(timezone.utc).isoformat(),
             "sub_engines": [e.__class__.__name__ for e in self._sub_engines],
         }
 
