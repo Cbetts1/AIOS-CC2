@@ -159,8 +159,24 @@ python aios/main.py [--ui terminal|web|none] [--port PORT] [--operator-token TOK
   --ui terminal        Launch curses terminal UI (default)
   --ui web             Launch web server only; open http://localhost:PORT
   --ui none            Background mode (engine runs, no UI)
-  --port 1313          Web server port (default: 1313)
+  --port 1313          Web server port (default: 1313 or $AIOS_PORT env var)
   --operator-token T   Validate an operator token at startup
+```
+
+The web server port can also be set via the `AIOS_PORT` environment variable
+(the `--port` flag takes precedence if both are given):
+
+```bash
+# Termux / Linux / Mac
+export AIOS_PORT=8080
+python aios/main.py --ui web
+
+# One-liner
+AIOS_PORT=8080 python aios/main.py --ui web
+
+# start.sh respects AIOS_PORT automatically
+export AIOS_PORT=8080
+bash start.sh web
 ```
 
 To generate your operator token:
@@ -191,6 +207,36 @@ curl -X POST http://localhost:1313/api/command \
 ---
 
 ## Frequently Asked Questions
+
+**Q: I get `OSError: [Errno 98] Address already in use` on startup.**  
+A: Another process is already using the web server port (default 1313).
+Options:
+
+1. **Use a different port** (quickest fix):
+   ```bash
+   python aios/main.py --port 8080
+   # or
+   export AIOS_PORT=8080 && python aios/main.py
+   ```
+
+2. **Find and stop the conflicting process** (Linux / Mac / Termux):
+   ```bash
+   lsof -i :1313        # shows which process owns the port
+   kill <PID>           # stop it, then relaunch AI-OS
+   ```
+   Windows:
+   ```
+   netstat -ano | findstr :1313
+   taskkill /PID <PID> /F
+   ```
+
+3. **Kill a stale AI-OS process** (Termux):
+   ```bash
+   pkill -f "aios/main.py"
+   ```
+
+The system will still start and all subsystems will be ONLINE even if the web
+server cannot bind — only the browser dashboard will be unavailable.
 
 **Q: Nothing happens when I run it on Windows.**  
 A: The terminal UI requires `curses`. On Windows, install `windows-curses`:

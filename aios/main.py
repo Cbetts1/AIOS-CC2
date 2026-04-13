@@ -37,8 +37,9 @@ def parse_args():
                         help="UI mode: terminal (curses), web (browser), none (background)")
     parser.add_argument("--operator-token", default=None,
                         help="Operator authentication token")
-    parser.add_argument("--port", type=int, default=1313,
-                        help="Web server port (default: 1313)")
+    default_port = int(os.environ.get("AIOS_PORT", 1313))
+    parser.add_argument("--port", type=int, default=default_port,
+                        help="Web server port (default: 1313, or $AIOS_PORT env var)")
     return parser.parse_args()
 
 
@@ -179,16 +180,30 @@ def boot_subsystems():
 
 
 def start_web_server(cc, port):
-    """Start web server in background thread."""
+    """Start web server in background thread.
+
+    Returns the ``AIWebServer`` instance.  If the port is unavailable the
+    server is returned in an unbound state so the rest of the system can
+    continue running — only the web UI will be absent.
+    """
     from aios.web.server import AIWebServer
     srv = AIWebServer(command_center=cc)
     srv.PORT = port
     try:
         srv.start()
-        print(f"  [WEB] Server started: http://localhost:{port}")
+        print(f"  [WEB] Server started:  http://localhost:{port}")
     except OSError as e:
-        print(f"  [WEB] WARNING: Could not bind to port {port}: {e}")
-        print(f"  [WEB] Web UI unavailable. Use --port to choose a different port.")
+        print()
+        print(f"  [WEB] ERROR: Could not bind to port {port}.")
+        print(f"  [WEB]   {e}")
+        print(f"  [WEB] To use a different port, run:")
+        print(f"  [WEB]     python aios/main.py --port <PORT>")
+        print(f"  [WEB]   or set:  export AIOS_PORT=<PORT>")
+        print(f"  [WEB] To find what is using port {port}, run:")
+        print(f"  [WEB]     lsof -i :{port}   (Linux/Mac/Termux)")
+        print(f"  [WEB]     netstat -ano | findstr :{port}   (Windows)")
+        print(f"  [WEB] Web UI unavailable — all other subsystems remain ONLINE.")
+        print()
     return srv
 
 
@@ -295,13 +310,15 @@ def main():
         else:
             print("  [AUTH] WARNING: Provided operator token is invalid. Continuing as unauthenticated.")
 
+    web_server = start_web_server(cc, args.port)
+
     print()
     print("  ═══════════════════════════════════════")
     print("  All subsystems ONLINE. AI-OS is ready.")
+    if web_server.is_bound():
+        print(f"  Web UI: http://localhost:{args.port}")
     print("  ═══════════════════════════════════════")
     print()
-
-    web_server = start_web_server(cc, args.port)
 
     stop_event = threading.Event()
 
