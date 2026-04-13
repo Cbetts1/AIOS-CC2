@@ -132,8 +132,12 @@ AIOS-CC2/
 ├── README.md
 ├── Buidrhis.md              ← Full design specification / master architecture doc
 ├── requirements.txt         ← Python version note (stdlib only — nothing to install)
+├── health_check.py          ← Standalone health check (exit 0 = all clear)
+├── demo.py                  ← Repeatable live-demo script
 ├── start.sh                 ← Unix/Mac launcher
-└── start.bat                ← Windows launcher
+├── start.bat                ← Windows launcher
+└── tests/
+    └── test_boot.py         ← pytest suite (42 tests, stdlib + pytest)
 ```
 
 ---
@@ -156,13 +160,14 @@ LAYER 1  Physical Abstraction  →  PolicyEngine, SecurityKernel, IdentityLock, 
 ## Command-line options
 
 ```
-python aios/main.py [--ui terminal|web|none] [--port PORT] [--operator-token TOKEN]
+python aios/main.py [--ui terminal|web|none] [--port PORT] [--operator-token TOKEN] [--trace-file PATH]
 
   --ui terminal        Launch curses terminal UI (default)
   --ui web             Launch web server only; open http://localhost:PORT
   --ui none            Background mode (engine runs, no UI)
   --port 1313          Web server port (default: 1313 or $AIOS_PORT env var)
   --operator-token T   Validate an operator token at startup
+  --trace-file PATH    Write append-only event/command trace to PATH
 ```
 
 The web server port can also be set via the `AIOS_PORT` environment variable
@@ -188,6 +193,11 @@ raw = "Chris-2026-04-13T08:39:00Z".encode()
 print(hashlib.sha256(raw).hexdigest())
 ```
 
+To launch with persistent trace logging:
+```bash
+python aios/main.py --ui none --trace-file aios_trace.log
+```
+
 ---
 
 ## Web API
@@ -208,203 +218,56 @@ curl -X POST http://localhost:1313/api/command \
 
 ---
 
-## Troubleshooting
+## Health Check
 
-### `OSError: [Errno 98] Address already in use`
-
-This is the most common startup failure. It means another process is already using port 1313
-(or whatever port you chose).
-
-**Quick fix — use a different port:**
-```bash
-python aios/main.py --ui web --port 8080
-# Then open: http://localhost:8080
-```
-
-**Find and stop the old process (Linux / Termux / Mac):**
-```bash
-# Find the process using port 1313
-lsof -i :1313
-# or:
-ss -tlnp | grep 1313
-
-# Kill it (replace <PID> with the number from the output above)
-kill <PID>
-
-# Then restart normally
-python aios/main.py --ui web
-```
-
-**Find and stop the old process (Windows):**
-```cmd
-netstat -ano | findstr :1313
-taskkill /PID <PID> /F
-```
-
-**Why does this happen?**  
-The web server tries to bind to `0.0.0.0:<port>`. If a previous run crashed without releasing
-the socket, the port stays occupied for a short time. `allow_reuse_address = True` is set on
-the server socket to reduce this, but it does not always help immediately on all platforms.
-
-**What you will see in the log (not a crash):**
-```
-  [WEB] WARNING: Could not bind to port 1313: [Errno 98] Address already in use
-  [WEB] Web UI unavailable. Use --port to choose a different port.
-```
-The system continues running — only the web UI is unavailable. Terminal mode and background
-mode are not affected.
-
----
-
-### Terminal UI shows nothing / crashes immediately
-
-- **Windows:** The curses terminal UI requires `windows-curses`. Install it once:
-  ```
-  pip install windows-curses
-  ```
-  Or switch to web mode: `python aios/main.py --ui web`
-
-- **SSH / headless sessions:** Use `--ui none` (background mode) and poll
-  `/api/status` instead.
-
-### Python version error
-
-Python 3.8 or newer is required. Check your version:
-```bash
-python --version   # or python3 --version
-```
-
-### Web UI loads but shows no data
-
-1. Confirm the server started — look for `[WEB] Server started: http://localhost:1313` in the
-   boot log. If you see the `WARNING` line instead, the port is in use (see above).
-2. Try refreshing the page. The dashboard auto-refreshes every 3 seconds.
-3. Run `curl http://localhost:1313/api/status` to test the API directly.
-
----
-
-## Live Demo Readiness
-
-Use this section before any external demo or real-world test.
-
-### Pre-demo checklist (go/no-go)
-
-Run through all items before starting the demo. Do not proceed if any item is ✗.
-
-| # | Check | How to verify | Expected |
-|---|-------|---------------|----------|
-| 1 | Python 3.8+ installed | `python --version` | `Python 3.x.x` |
-| 2 | Repo is up to date | `git status` | Clean working tree |
-| 3 | Port 1313 is free | `lsof -i :1313` (Linux/Mac) or `netstat -ano \| findstr :1313` (Windows) | No output (port is free) |
-| 4 | System boots without error | `python aios/main.py --ui none` — watch for `All subsystems ONLINE` | No `ERROR` lines |
-| 5 | Web server starts | Look for `[WEB] Server started` in the boot log | URL printed, no WARNING |
-| 6 | Web UI loads | Open `http://localhost:1313` in browser | Dashboard visible |
-| 7 | API responds | `curl http://localhost:1313/api/status` | JSON with `"status":"ONLINE"` |
-| 8 | Heartbeat is ticking | `curl http://localhost:1313/api/heartbeat` | `"alive":true` |
-| 9 | Terminal UI works (if demoing it) | `python aios/main.py --ui terminal` | Banner + menu visible |
-| 10 | Command `1.1` works | Type `1.1` in CMD box or terminal | Full system report printed |
-
-### Repeatable demo flow (5 minutes)
-
-```
-Step 1 — Start the system
-    bash start.sh web
-    # (or: python aios/main.py --ui web --port 1313)
-    # Wait for: "All subsystems ONLINE. AI-OS is ready."
-    # Wait for: "[WEB] Server started: http://localhost:1313"
-
-Step 2 — Open the dashboard
-    Open http://localhost:1313 in a browser.
-    Confirm the right panel shows heartbeat count incrementing.
-
-Step 3 — Run a system report
-    In the CMD> box, type: 1.1   (press Enter or SEND)
-    Expected output: full system status report
-
-Step 4 — Check diagnostics
-    Type: 11.1
-    Expected: diagnostic health check, all layers ONLINE
-
-Step 5 — Show live sensors
-    Type: 4.4
-    Expected: simulated CPU temp, load, battery readings
-
-Step 6 — Check heartbeat
-    Type: 5.3
-    Expected: heartbeat beat count and last beat time
-
-Step 7 — Stop cleanly
-    Press Ctrl+C in the terminal where you ran main.py
-    Expected: "AI-OS shutdown complete."
-```
-
-### What to say during the demo
-
-- "This is AIOS-CC2 — a fully self-contained virtual OS running on Python stdlib only."
-- "All hardware is simulated: CPU, memory, storage, network, sensors."
-- "The system uses a 7-layer architecture — you can see all layer statuses here."
-- "The web dashboard auto-refreshes every 3 seconds and shows live subsystem data."
-- "Every subsystem publishes to a shared StateRegistry — that's what drives the dashboard."
-
-### Post-demo shutdown
+Run the built-in health check at any time (no server required):
 
 ```bash
-# Clean stop (Ctrl+C in the launch terminal), then verify port is free:
-lsof -i :1313   # should return nothing
+# Quick check — exit 0 means all clear
+python health_check.py
+
+# Verbose output (shows component detail)
+python health_check.py --verbose
+
+# JSON output (for CI / automation)
+python health_check.py --json
 ```
 
----
-
+Expected output:
+```
 ## Frequently Asked Questions
 
-**Q: I get `OSError: [Errno 98] Address already in use` on startup.**  
-A: Another process is already using the web server port (default 1313).
-Options:
-
-1. **Use a different port** (quickest fix):
-   ```bash
-   python aios/main.py --port 8080
-   # or
-   export AIOS_PORT=8080 && python aios/main.py
-   ```
-
-2. **Find and stop the conflicting process** (Linux / Mac / Termux):
-   ```bash
-   lsof -i :1313        # shows which process owns the port
-   kill <PID>           # stop it, then relaunch AI-OS
-   ```
-   Windows:
-   ```
-   netstat -ano | findstr :1313
-   taskkill /PID <PID> /F
-   ```
-
-3. **Kill a stale AI-OS process** (Termux):
-   ```bash
-   pkill -f "aios/main.py"
-   ```
-
-The system will still start and all subsystems will be ONLINE even if the web
-server cannot bind — only the browser dashboard will be unavailable.
-
-**Q: Nothing happens when I run it on Windows.**  
+**Q: Nothing happens when I run it on Windows.**
 A: The terminal UI requires `curses`. On Windows, install `windows-curses`:
 ```
 pip install windows-curses
 ```
 Or use Web mode instead: `python aios/main.py --ui web`
 
-**Q: Where are logs stored?**  
-A: All logs are in-memory. They are visible via the command menus (Menu 15) and the `/api/status` JSON. Persistent log files are on the roadmap.
+**Q: Where are logs stored?**
+A: All logs are in-memory. They are visible via the command menus (Menu 15)
+and the `/api/status` JSON. Use `--trace-file` to persist them to disk.
 
-**Q: How do I shut down cleanly?**  
-A: In the terminal UI, press `q` to exit the UI (the engine keeps running). To stop everything, press `Ctrl+C` in the terminal where you launched `main.py`.
+**Q: How do I shut down cleanly?**
+A: In the terminal UI, press `q` to exit the UI (the engine keeps running).
+To stop everything, press `Ctrl+C` in the terminal where you launched `main.py`.
 
-**Q: What is `identity.lock`?**  
-A: A JSON file that hard-locks the operator identity to "Chris". The `IdentityLock` module reads it at boot. Do not delete it.
+**Q: What is `identity.lock`?**
+A: A JSON file that hard-locks the operator identity to "Chris". The
+`IdentityLock` module reads it at boot. Do not delete or edit it.
 
-**Q: Can I add my own commands?**  
-A: Yes — edit `aios/command/command_center.py`. The `MENU` dict defines the menu structure, and `_render_status_for()` is the dispatcher. Add a new `elif top == "X"` block.
+**Q: Can I add my own commands?**
+A: Yes — edit `aios/command/command_center.py`. The `MENU` dict defines the
+menu structure, and `_generic_handler()` is the dispatcher. Add a new
+`elif top == "X"` block and a matching `MENU` entry.
+
+**Q: How do I run the system in CI?**
+A: Use `python health_check.py --json` — it exits 0 on pass, 1 on fail, and
+outputs structured JSON for easy parsing. Or run `python -m pytest tests/ -v`.
+
+**Q: Is any internet connection required?**
+A: No. AIOS-CC2 is fully self-contained. The cloud layer is virtual and
+requires no external cloud provider.
 
 **Q: The web UI shows a WARNING about the port but the system is still running — is that OK?**  
 A: Yes. The system boots fully and runs in the background. Only the web dashboard is unavailable.
@@ -419,12 +282,11 @@ See `Buidrhis.md` for the full design spec. Key next steps:
 
 - [ ] Persistent log files (write security/audit logs to `VirtualStorage` and optionally to disk)
 - [ ] Real APK — integrate Kivy or BeeWare to produce an Android package
-- [ ] Automated tests (`pytest` suite for each subsystem)
 - [ ] Web UI authentication (login form before `/api/status` is accessible)
 - [ ] Real cloud bridge (allow an optional external API layer on top of the virtual one)
 - [ ] Self-hosting: package as a Docker container so the system can host itself
+- [ ] Expanded test coverage (integration tests for web server, cloud loop)
 
 ---
 
 *AI-OS v2.0.0-CC2 — Operator: Chris*
-

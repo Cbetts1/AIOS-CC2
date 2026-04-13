@@ -1,1 +1,1 @@
-"""Test suite for AI-OS CC2."""
+# AI-OS CC2 test package
