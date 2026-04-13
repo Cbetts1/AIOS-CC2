@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Ensure the project root (parent of the aios/ package) is in the Python path
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -43,13 +44,15 @@ def parse_args():
                         help="UI mode: terminal (curses), web (browser), none (background)")
     parser.add_argument("--operator-token", default=None,
                         help="Operator authentication token")
-    parser.add_argument("--port", type=int, default=1313,
-                        help="Web server port (default: 1313)")
+    default_port = int(os.environ.get("AIOS_PORT", 1313))
+    parser.add_argument("--port", type=int, default=default_port,
+                        help="Web server port (default: 1313, or $AIOS_PORT env var)")
     return parser.parse_args()
 
 
 def boot_subsystems():
     """Initialize all subsystems in order."""
+    import os
     from aios.core.state_registry import StateRegistry
     from aios.core.policy_engine import PolicyEngine
     from aios.core.security_kernel import SecurityKernel
@@ -69,8 +72,12 @@ def boot_subsystems():
     from aios.procwriters.proc_writers import ProcWriters
     from aios.sandbox.sandbox import Sandbox
 
+    # Base persistence directory
+    _persist_base = os.path.join(os.path.expanduser("~"), ".aios")
+
     print("  [1/14] StateRegistry ...")
     state = StateRegistry()
+    state.set_persist_path(os.path.join(_persist_base, "state.json"))
 
     print("  [2/14] PolicyEngine ...")
     policy = PolicyEngine()
@@ -102,7 +109,7 @@ def boot_subsystems():
     print("  [6/14] Virtual Hardware ...")
     vcpu = VirtualCPU()
     vmem = VirtualMemory()
-    vstorage = VirtualStorage()
+    vstorage = VirtualStorage(persist_dir=os.path.join(_persist_base, "vstorage"))
     vnet = VirtualNetwork()
     vnet.create_interface("lo0")
     vnet.create_interface("eth0")
@@ -136,6 +143,13 @@ def boot_subsystems():
     print("  [11/14] ProcessSupervisor ...")
     supervisor = ProcessSupervisor()
 
+    # Register a coroutine factory that properly activates and runs the heartbeat
+    async def _heartbeat_runner():
+        heartbeat.activate()
+        await heartbeat._run()
+
+    supervisor.register("heartbeat", _heartbeat_runner)
+
     print("  [12/14] ProcWriters ...")
     proc_writers = ProcWriters(vstorage=vstorage)
 
@@ -152,6 +166,12 @@ def boot_subsystems():
     from aios.cloud.cloud_api import CloudAPI
     cloud = CloudController(state_registry=state, mesh=mesh, vcpu=vcpu)
     cloud.boot()
+    # Auto-spawn one worker node so the cloud is immediately operational
+    _spawn = cloud.spawn_node()
+    if "error" not in _spawn:
+        print(f"         Auto-spawned cloud node: {_spawn.get('node_id')} on port {_spawn.get('port')}")
+    else:
+        print(f"         WARNING: Could not auto-spawn cloud node: {_spawn.get('error')}")
     cloud_loop = CloudLoop(cloud_controller=cloud, mesh=mesh)
     cloud_api = CloudAPI(cloud_controller=cloud)
 
@@ -211,16 +231,30 @@ def boot_subsystems():
 
 
 def start_web_server(cc, port):
-    """Start web server in background thread."""
+    """Start web server in background thread.
+
+    Returns the ``AIWebServer`` instance.  If the port is unavailable the
+    server is returned in an unbound state so the rest of the system can
+    continue running — only the web UI will be absent.
+    """
     from aios.web.server import AIWebServer
     srv = AIWebServer(command_center=cc)
     srv.PORT = port
     try:
         srv.start()
-        print(f"  [WEB] Server started: http://localhost:{port}")
+        print(f"  [WEB] Server started:  http://localhost:{port}")
     except OSError as e:
-        print(f"  [WEB] WARNING: Could not bind to port {port}: {e}")
-        print(f"  [WEB] Web UI unavailable. Use --port to choose a different port.")
+        print()
+        print(f"  [WEB] ERROR: Could not bind to port {port}.")
+        print(f"  [WEB]   {e}")
+        print(f"  [WEB] To use a different port, run:")
+        print(f"  [WEB]     python aios/main.py --port <PORT>")
+        print(f"  [WEB]   or set:  export AIOS_PORT=<PORT>")
+        print(f"  [WEB] To find what is using port {port}, run:")
+        print(f"  [WEB]     lsof -i :{port}   (Linux/Mac/Termux)")
+        print(f"  [WEB]     netstat -ano | findstr :{port}   (Windows)")
+        print(f"  [WEB] Web UI unavailable — all other subsystems remain ONLINE.")
+        print()
     return srv
 
 
@@ -403,13 +437,15 @@ def main():
         else:
             print("  [AUTH] WARNING: Provided operator token is invalid. Continuing as unauthenticated.")
 
+    web_server = start_web_server(cc, args.port)
+
     print()
     print("  ═══════════════════════════════════════")
     print("  All subsystems ONLINE. AI-OS is ready.")
+    if web_server.is_bound():
+        print(f"  Web UI: http://localhost:{args.port}")
     print("  ═══════════════════════════════════════")
     print()
-
-    web_server = start_web_server(cc, args.port)
 
     stop_event = threading.Event()
 

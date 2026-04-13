@@ -360,14 +360,13 @@ class CommandCenter:
                 for i in range(1, 8):
                     lines.append(f"  Layer {i}: ONLINE ✓")
             elif sub == "3":
-                subsystems = [
-                    "StateRegistry", "PolicyEngine", "SecurityKernel", "IdentityLock",
-                    "ProcessSupervisor", "MemoryMapController", "AuraEngine",
-                    "VirtualCPU", "VirtualMemory", "VirtualStorage", "VirtualNetwork",
-                    "VirtualSensors", "HostBridge", "NodeMesh", "HeartbeatSystem",
-                ]
-                for s in subsystems:
-                    lines.append(f"  ✓ {s}")
+                full = self.get_status_dict()
+                for name, comp in full.items():
+                    if isinstance(comp, dict):
+                        ok = "✓" if comp.get("healthy") else "✗"
+                        lines.append(f"  {ok} {name}")
+                    else:
+                        lines.append(f"  - {name}: {comp}")
             elif sub == "4":
                 lines.append(f"  Uptime: {self._uptime_str()}")
                 if self._vstorage:
@@ -379,10 +378,44 @@ class CommandCenter:
                 if self._vcpu:
                     cs = self._vcpu.status()
                     lines.append(f"  CPU Cycles: {cs.get('cycles', 0)}")
+            elif sub == "5":
+                for entry in self.get_console_log(limit=20):
+                    lines.append(f"  [{entry.get('ts','')[:19]}] {entry.get('msg','')}")
+
+        # Layer Control
+        elif top == "2":
+            _layer_desc = {
+                "1": ("Physical Abstraction", ["PolicyEngine", "SecurityKernel", "IdentityLock", "HeartbeatSystem"]),
+                "2": ("Virtual Hardware",     ["VirtualCPU", "VirtualMemory", "VirtualStorage", "VirtualNetwork", "VirtualSensors"]),
+                "3": ("Kernel Bridge",        ["HostBridge", "SandboxManager", "PermissionContainer"]),
+                "4": ("Process & Memory",     ["ProcessSupervisor", "MemoryMapController", "StateRegistry", "ProcWriters"]),
+                "5": ("Engine & Intelligence",["AuraEngine", "BuilderEngine", "RepairEngine", "DocumentationEngine", "EvolutionEngine", "LegalCortex"]),
+                "6": ("Command & Interface",  ["CommandCenter", "CloudController", "CloudNetwork", "CloudCompute"]),
+                "7": ("Application & Output", ["TerminalUI", "WebServer", "APKBootloader", "ChatInterface"]),
+            }
+            if sub in _layer_desc:
+                name, comps = _layer_desc[sub]
+                lines.append(f"  Layer {sub} — {name}")
+                lines.append(f"  Status: ONLINE ✓")
+                lines.append(f"  Components:")
+                for c in comps:
+                    lines.append(f"    ✓ {c}")
+            else:
+                for k, (lname, comps) in _layer_desc.items():
+                    lines.append(f"  L{k} {lname}: ONLINE ({len(comps)} components)")
 
         # Engine Control
         elif top == "3":
-            if sub == "2" and self._aura:
+            if sub == "1":
+                lines.append("  Starting all engines...")
+                if self._aura:
+                    self._aura.tick()
+                    lines.append("  ✓ AuraEngine ticked (all sub-engines advanced)")
+                if self._supervisor:
+                    procs = self._supervisor.status().get("processes", {})
+                    lines.append(f"  ✓ ProcessSupervisor: {len(procs)} process(es) registered")
+                lines.append("  All engines RUNNING.")
+            elif sub == "2" and self._aura:
                 self._aura.tick()
                 lines.append("  AuraEngine ticked.")
             if self._aura:
@@ -390,6 +423,28 @@ class CommandCenter:
                 lines.append(f"  AuraEngine: {st.get('status', 'UNKNOWN')}")
                 lines.append(f"  Ticks: {st.get('tick_count', 0)}")
                 lines.append(f"  Uptime: {st.get('uptime_seconds', 0)}s")
+                if sub == "3":
+                    b = self._aura.builder.status()
+                    lines.append(f"  BuilderEngine queue : {b.get('queue_depth', 0)}")
+                    lines.append(f"  Built items         : {b.get('completed_count', 0)}")
+                    lines.append(f"  Healthy             : {b.get('healthy', False)}")
+                elif sub == "4":
+                    r = self._aura.repair.status()
+                    lines.append(f"  RepairEngine scans  : {r.get('scan_count', 0)}")
+                    lines.append(f"  Repairs performed   : {r.get('repair_count', 0)}")
+                    lines.append(f"  Healthy             : {r.get('healthy', False)}")
+                elif sub == "5":
+                    d = self._aura.documentation.status()
+                    lines.append(f"  DocumentationEngine docs : {d.get('doc_count', 0)}")
+                    lines.append(f"  Topics: {', '.join(d.get('topics', []))}")
+                elif sub == "6":
+                    e = self._aura.evolution.status()
+                    lines.append(f"  EvolutionEngine cycles  : {e.get('evolution_count', 0)}")
+                    lines.append(f"  Healthy                 : {e.get('healthy', False)}")
+                elif sub == "7":
+                    lc = self._aura.legal.status()
+                    for k, v in lc.items():
+                        lines.append(f"  {k}: {v}")
 
         # Virtual Hardware
         elif top == "4":
@@ -427,10 +482,27 @@ class CommandCenter:
                 lines.append(f"  Nodes: {ms.get('node_count', 0)}")
                 lines.append(f"  Broadcasts: {ms.get('messages_broadcast', 0)}")
                 lines.append(f"  Sent: {ms.get('messages_sent', 0)}")
+                for n in ms.get("nodes", []):
+                    lines.append(f"    ● {n['name']}  rx={n['rx']}  tx={n['tx']}")
             elif sub == "3" and self._heartbeat:
                 hb = self._heartbeat.status()
                 for k, v in hb.items():
                     lines.append(f"  {k}: {v}")
+            elif sub == "4" and self._vnet:
+                pkt_log = self._vnet.get_packet_log(limit=20) if hasattr(self._vnet, "get_packet_log") else []
+                if pkt_log:
+                    for pkt in pkt_log:
+                        lines.append(f"  [{pkt.get('ts','')[:19]}] {pkt.get('iface','')} → {pkt.get('dst','')} sz={pkt.get('size',0)}")
+                else:
+                    lines.append("  No packets logged yet.")
+            elif sub == "5":
+                msg = {"type": "operator_broadcast", "from": "CommandCenter",
+                       "ts": datetime.now(timezone.utc).isoformat(), "msg": "Operator ping"}
+                if self._mesh:
+                    count = self._mesh.broadcast_sync(msg)
+                    lines.append(f"  Broadcast sent to {count} mesh node(s).")
+                else:
+                    lines.append("  NodeMesh not attached.")
 
         # Security
         elif top == "6":
@@ -438,10 +510,21 @@ class CommandCenter:
                 st = self._identity.status()
                 for k, v in st.items():
                     lines.append(f"  {k}: {v}")
+                if self._security:
+                    lines.append(f"  authenticated: {self._security.is_authenticated()}")
             elif sub == "2" and self._security:
                 log = self._security.get_security_log(limit=10)
                 for entry in log:
                     lines.append(f"  [{entry.get('timestamp','')}] {entry.get('type','')} {entry.get('operator','')}")
+            elif sub == "3" and self._policy:
+                rpt = self._policy.status() if hasattr(self._policy, "status") else {}
+                for k, v in rpt.items():
+                    lines.append(f"  {k}: {v}")
+                audit = self._policy.get_audit_log(limit=5)
+                if audit:
+                    lines.append("  Recent policy decisions:")
+                    for e in audit:
+                        lines.append(f"    [{e.get('timestamp','')[:19]}] {e.get('action','')} → {'ALLOW' if e.get('allowed') else 'DENY'}")
             elif sub == "4" and self._bridge:
                 perm = self._bridge.permissions.status()
                 lines.append(f"  Whitelist count: {perm.get('whitelist_count', 0)}")

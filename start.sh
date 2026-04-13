@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# AI-OS CC2 — Unix/Mac launcher
+# AI-OS CC2 — Unix/Mac/Termux launcher
 # Usage: bash start.sh [terminal|web|none] [port]
-set -e
+#
+# Port resolution order (highest to lowest priority):
+#   1. Second argument to this script:  bash start.sh web 8080
+#   2. AIOS_PORT environment variable:  export AIOS_PORT=8080
+#   3. Built-in default:                1313
 
 UI="${1:-terminal}"
-PORT="${2:-1313}"
+
+# Honour AIOS_PORT env var; fall back to 1313 if not set
+PORT="${2:-${AIOS_PORT:-1313}}"
+# Export so the Python process inherits it
+export AIOS_PORT="$PORT"
 
 echo "======================================================"
 echo "  AI-OS CC2 — Starting in $UI mode on port $PORT"
