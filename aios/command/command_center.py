@@ -1,4 +1,5 @@
 """AI-OS Command Center - Main command and control interface."""
+import os
 import time
 from datetime import datetime, timezone
 
@@ -143,11 +144,34 @@ class CommandCenter:
         self._sandbox = None
         self._cloud = None
         self._console_log = []
+        self._trace_file = None   # optional: path to write append-only trace log
 
     def attach(self, **kwargs) -> None:
         for k, v in kwargs.items():
             if hasattr(self, f"_{k}"):
                 setattr(self, f"_{k}", v)
+
+    def set_trace_file(self, path: str) -> None:
+        """Enable persistent trace logging to *path* (append mode)."""
+        self._trace_file = path
+        # Write a header line so the file is clearly identified
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(
+                    f"# AI-OS CC2 TRACE LOG — started {datetime.now(timezone.utc).isoformat()}\n"
+                )
+        except OSError:
+            self._trace_file = None
+
+    def _write_trace(self, msg: str) -> None:
+        if not self._trace_file:
+            return
+        try:
+            with open(self._trace_file, "a", encoding="utf-8") as fh:
+                fh.write(f"[{datetime.now(timezone.utc).isoformat()}] {msg}\n")
+        except OSError:
+            pass
 
     def boot(self) -> dict:
         self._boot_time = time.time()
@@ -155,6 +179,8 @@ class CommandCenter:
         self._log("AI-OS Command Center ONLINE")
         self._log(f"Operator: {self._get_operator()}")
         self._log(f"Boot time: {datetime.now(timezone.utc).isoformat()}")
+        self._write_trace("BOOT  AI-OS Command Center ONLINE")
+        self._write_trace(f"BOOT  Operator: {self._get_operator()}")
         return {"status": "ONLINE", "boot_time": self._boot_time}
 
     def _get_operator(self) -> str:
@@ -250,14 +276,18 @@ class CommandCenter:
         # ── Plain-text cloud commands (cloud start / stop / status / etc.) ──
         lower = cmd.lower()
         if lower.startswith("cloud"):
-            return self._handle_cloud_text(cmd)
+            result = self._handle_cloud_text(cmd)
+            self._write_trace(f"CMD   {cmd!r} -> {result[:80].replace(chr(10), ' ')}")
+            return result
 
         parts = cmd.split(".")
         top = parts[0] if parts else ""
         sub = parts[1] if len(parts) > 1 else ""
 
         if top not in self.MENU:
-            return f"Unknown command: '{cmd}'. Enter 1-16 for main menu."
+            msg = f"Unknown command: '{cmd}'. Enter 1-16 for main menu."
+            self._write_trace(f"CMD   {cmd!r} -> UNKNOWN")
+            return msg
 
         menu_name = self.MENU[top][0]
 
@@ -270,12 +300,17 @@ class CommandCenter:
             lines.append("\n  Enter sub-option (e.g. {}.1):".format(top))
             result = "\n".join(lines)
             self._log(f"CMD: {top} -> {menu_name}")
+            self._write_trace(f"CMD   {top} -> {menu_name} (menu)")
             return result
 
         handler = f"_handle_{top}_{sub}"
         if hasattr(self, handler):
-            return getattr(self, handler)()
-        return self._generic_handler(top, sub)
+            result = getattr(self, handler)()
+            self._write_trace(f"CMD   {cmd} -> {result[:80].replace(chr(10), ' ')}")
+            return result
+        result = self._generic_handler(top, sub)
+        self._write_trace(f"CMD   {cmd} -> {result[:80].replace(chr(10), ' ')}")
+        return result
 
     def _handle_cloud_text(self, cmd: str) -> str:
         """Dispatch plain-text cloud commands from terminal / web input."""

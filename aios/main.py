@@ -39,6 +39,8 @@ def parse_args():
                         help="Operator authentication token")
     parser.add_argument("--port", type=int, default=1313,
                         help="Web server port (default: 1313)")
+    parser.add_argument("--trace-file", default=None,
+                        help="Path to append-only trace/event log file (default: disabled)")
     return parser.parse_args()
 
 
@@ -286,6 +288,11 @@ def main():
     args = parse_args()
     subsystems = boot_subsystems()
     cc = subsystems["cc"]
+
+    # Enable trace file if requested
+    if args.trace_file:
+        cc.set_trace_file(args.trace_file)
+        print(f"  [TRACE] Logging to: {args.trace_file}")
 
     # Validate operator token if provided on command line
     if args.operator_token:
