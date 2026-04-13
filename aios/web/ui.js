@@ -70,7 +70,7 @@
   async function tryLogin() {
     const input = $("token-input");
     const token = input ? input.value.trim() : "";
-    if (!token) { showLogin("Please enter your operator token."); return; }
+    if (!token) { showLogin("Please enter the admin password."); return; }
     try {
       const resp = await fetch(authUrl(`/api/login?token=${encodeURIComponent(token)}`));
       const data = await resp.json();
@@ -81,7 +81,7 @@
         initSSE();
         appendConsole("  [AUTH] Operator authenticated.", "ok");
       } else {
-        showLogin("Invalid token. Try again.");
+        showLogin("Invalid password. Try again.");
       }
     } catch (err) {
       showLogin("Login failed: " + err.message);

@@ -75,19 +75,19 @@ def boot_subsystems():
     # Base persistence directory
     _persist_base = os.path.join(os.path.expanduser("~"), ".aios")
 
-    print("  [1/14] StateRegistry ...")
+    print("  [1/15] StateRegistry ...")
     state = StateRegistry()
     state.set_persist_path(os.path.join(_persist_base, "state.json"))
 
-    print("  [2/14] PolicyEngine ...")
+    print("  [2/15] PolicyEngine ...")
     policy = PolicyEngine()
     policy.set_log_file(os.path.join(AIOS_DATA_DIR, "logs", "policy.jsonl"))
 
-    print("  [3/14] SecurityKernel ...")
+    print("  [3/15] SecurityKernel ...")
     security = SecurityKernel()
     security.set_log_file(os.path.join(AIOS_DATA_DIR, "logs", "security.jsonl"))
 
-    print("  [4/14] IdentityLock ...")
+    print("  [4/15] IdentityLock ...")
     identity = IdentityLock()
     identity.load()
     print(f"         Operator: {identity.get_operator()} | Level: {identity.get_level()}")
@@ -99,14 +99,14 @@ def boot_subsystems():
     except Exception as _sec_exc:
         print(f"         SecurityKernel WARNING: {_sec_exc}")
 
-    print("  [5/14] MemoryMapController ...")
+    print("  [5/15] MemoryMapController ...")
     memory = MemoryMapController()
     memory.allocate("kernel", 4096)
     memory.allocate("heap", 16384)
     memory.allocate("stack", 2048)
     memory.allocate("shared", 8192)
 
-    print("  [6/14] Virtual Hardware ...")
+    print("  [6/15] Virtual Hardware ...")
     vcpu = VirtualCPU()
     vmem = VirtualMemory()
     vstorage = VirtualStorage(persist_dir=os.path.join(_persist_base, "vstorage"))
@@ -122,25 +122,25 @@ def boot_subsystems():
     if vstorage.load_from_file(_vstorage_path):
         print(f"         VirtualStorage restored from {_vstorage_path}")
 
-    print("  [7/14] HostBridge ...")
+    print("  [7/15] HostBridge ...")
     bridge = HostBridge()
     bridge_info = bridge.boot()
     print(f"         Host OS: {bridge_info.get('host_os','?')} | CPUs: {bridge_info.get('cpu_count','?')}")
 
-    print("  [8/14] NodeMesh ...")
+    print("  [8/15] NodeMesh ...")
     mesh = NodeMesh()
     for node in ["core", "engine", "bridge", "command", "web", "heartbeat", "procwriter"]:
         mesh.add_node(node)
 
-    print("  [9/14] HeartbeatSystem ...")
+    print("  [9/15] HeartbeatSystem ...")
     heartbeat = HeartbeatSystem(node_mesh=mesh)
 
-    print("  [10/14] AuraEngine ...")
+    print("  [10/15] AuraEngine ...")
     aura = AuraEngine(state_registry=state)
     aura_boot = aura.boot()
     print(f"          Sub-engines: {len(aura_boot.get('sub_engines', []))}")
 
-    print("  [11/14] ProcessSupervisor ...")
+    print("  [11/15] ProcessSupervisor ...")
     supervisor = ProcessSupervisor()
 
     # Register a coroutine factory that properly activates and runs the heartbeat
@@ -150,13 +150,13 @@ def boot_subsystems():
 
     supervisor.register("heartbeat", _heartbeat_runner)
 
-    print("  [12/14] ProcWriters ...")
+    print("  [12/15] ProcWriters ...")
     proc_writers = ProcWriters(vstorage=vstorage)
 
-    print("  [13/14] Sandbox ...")
+    print("  [13/15] Sandbox ...")
     sandbox = Sandbox()
 
-    print("  [14/14] CommandCenter ...")
+    print("  [14/15] CommandCenter ...")
     cc = CommandCenter()
     cc.set_log_file(os.path.join(AIOS_DATA_DIR, "logs", "console.jsonl"))
 
