@@ -15,19 +15,42 @@
 git clone https://github.com/Cbetts1/AIOS-CC2.git
 cd AIOS-CC2
 
-# 2. Launch with the Terminal UI (default — works in any terminal)
+# 2. Preflight check (Python version, identity.lock, port)
+bash start.sh check
+
+# 3. Launch with the Terminal UI (default — works in any terminal)
 python aios/main.py
 
-# 3. OR launch in Web mode (opens a browser dashboard)
+# 4. OR launch in Web mode (opens a browser dashboard)
 python aios/main.py --ui web
 # Then open:  http://localhost:1313
 
-# 4. OR run in the background (no UI, just the engine)
+# 5. OR run in the background (no UI, just the engine)
 python aios/main.py --ui none
 
-# 5. Windows users: double-click start.bat  (or run: start.bat)
-#    Linux/Mac users: run: bash start.sh
+# Windows users: double-click start.bat  (or run: start.bat)
+# Linux/Mac users: run: bash start.sh
 ```
+
+### Canned demo
+```bash
+bash demo.sh          # starts AI-OS, walks every menu via curl, saves logs/demo.log
+```
+
+---
+
+## Boot Paths
+
+There are three ways to start AI-OS — use `main.py` for everything except quick
+terminal-only work:
+
+| Command | Notes |
+|---|---|
+| `python aios/main.py` | **Recommended.** Full subsystem boot — all 15 subsystems, cloud loop, web server. |
+| `python aios/terminal/start_terminal.py` | Convenience alias — identical to `main.py` but forces terminal UI. |
+| `bash start.sh [terminal\|web\|none] [port] [token]` | Shell wrapper for Unix/Mac. |
+| `start.bat [terminal\|web\|none] [port] [token]` | Shell wrapper for Windows. |
+| `bash start.sh check` | Preflight validation: Python version, identity.lock, port availability. |
 
 ---
 
@@ -115,11 +138,12 @@ AIOS-CC2/
 │   ├── architecture.map     ← ASCII layer diagram
 │   ├── identity/
 │   │   └── identity.lock    ← Operator identity (JSON, do not edit)
-│   ├── core/                ← Kernel-layer: state, policy, security, identity, memory
+│   ├── core/                ← Kernel-layer: state, policy, security, identity, memory, log_writer
 │   ├── engine/              ← AuraEngine + Builder/Repair/Doc/Evolution/Legal sub-engines
 │   ├── virtual/             ← Simulated CPU, RAM, storage, network, sensors
 │   ├── bridge/              ← Host-bridge: capability detection, permissions, sandbox
 │   ├── mesh/                ← Internal node mesh + heartbeat (asyncio)
+│   ├── cloud/               ← CloudController, CloudLoop, CloudNode (TCP socket workers)
 │   ├── command/             ← CommandCenter: 16-category menu, banner, status
 │   ├── terminal/            ← Curses terminal UI
 │   ├── web/                 ← HTTP server + HTML/CSS/JS dashboard
@@ -127,11 +151,20 @@ AIOS-CC2/
 │   ├── procwriters/         ← /proc-style virtual filesystem writer
 │   ├── sandbox/             ← Sandbox policy enforcer
 │   └── docs/                ← Markdown documentation (legal, brand, operator, public)
+├── tests/                   ← pytest suite (test_boot, test_command_center, test_web_api, …)
+├── logs/                    ← Persistent log files (aios.log, debug.log, demo.log)
 ├── README.md
+├── CHANGELOG.md             ← What changed and when
+├── DEPLOY.md                ← Deployment guide (bare-metal, Docker, remote, systemd)
 ├── Buidrhis.md              ← Full design specification / master architecture doc
+├── Dockerfile               ← Container build
+├── docker-compose.yml       ← One-command demo launch
+├── aios.service             ← systemd unit for long-running demo host
+├── Procfile                 ← Heroku / Render entry point
+├── pytest.ini               ← Test runner configuration
 ├── requirements.txt         ← Python version note (stdlib only — nothing to install)
-├── start.sh                 ← Unix/Mac launcher
-└── start.bat                ← Windows launcher
+├── start.sh                 ← Unix/Mac launcher (also: bash start.sh check)
+└── start.bat                ← Windows launcher (also: start.bat check)
 ```
 
 ---
@@ -154,39 +187,111 @@ LAYER 1  Physical Abstraction  →  PolicyEngine, SecurityKernel, IdentityLock, 
 ## Command-line options
 
 ```
-python aios/main.py [--ui terminal|web|none] [--port PORT] [--operator-token TOKEN]
+python aios/main.py [--ui terminal|web|none] [--port PORT]
+                    [--operator-token TOKEN] [--debug]
 
   --ui terminal        Launch curses terminal UI (default)
   --ui web             Launch web server only; open http://localhost:PORT
   --ui none            Background mode (engine runs, no UI)
   --port 1313          Web server port (default: 1313)
   --operator-token T   Validate an operator token at startup
-```
-
-To generate your operator token:
-```python
-import hashlib
-raw = "Chris-2026-04-13T08:39:00Z".encode()
-print(hashlib.sha256(raw).hexdigest())
+  --debug              Verbose exception output + write logs/debug.log
 ```
 
 ---
 
 ## Web API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/status` | GET | Full JSON status of all subsystems |
-| `/api/heartbeat` | GET | Heartbeat beat count and timestamp |
-| `/api/command` | POST | Execute a command; body: `{"cmd": "1.1"}` |
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/health` | GET | none | Liveness probe: `{"status":"OK","uptime_seconds":N}` |
+| `/api/status` | GET | none | Full JSON status of all subsystems |
+| `/api/heartbeat` | GET | none | Heartbeat beat count and timestamp |
+| `/api/proc` | GET | none | Virtual `/proc/aios/` file listing |
+| `/api/command` | POST | **password** | Execute a command |
+| `/api/debug` | GET | **password** | Full `StateRegistry` dump |
 
-Example:
+### Admin password
+
+`/api/command` and `/api/debug` require the admin password **`7212`**.
+Pass it in any of these ways:
+
 ```bash
-curl http://localhost:1313/api/status
+# JSON body key
 curl -X POST http://localhost:1313/api/command \
      -H "Content-Type: application/json" \
+     -d '{"cmd": "1.1", "password": "7212"}'
+
+# HTTP header
+curl -X POST http://localhost:1313/api/command \
+     -H "Content-Type: application/json" \
+     -H "X-Admin-Password: 7212" \
      -d '{"cmd": "1.1"}'
+
+# Query param (GET endpoints)
+curl "http://localhost:1313/api/debug?password=7212"
 ```
+
+Open endpoints (no password needed):
+```bash
+curl http://localhost:1313/api/health
+curl http://localhost:1313/api/status
+curl http://localhost:1313/api/heartbeat
+curl http://localhost:1313/api/proc
+```
+
+> **⚠ Security note:** The admin password is a shared secret stored in plain text
+> in `aios/web/server.py`.  Change `_ADMIN_PASSWORD` before any public-internet
+> deployment.  See [DEPLOY.md](DEPLOY.md) for full security guidance.
+
+---
+
+## Operator Token
+
+The `IdentityLock` uses a SHA-256 token derived from the operator name and the
+`created` timestamp in `aios/identity/identity.lock`.
+
+To compute your token:
+```python
+import hashlib
+raw = "Chris-2026-04-13T08:39:00Z".encode()
+print(hashlib.sha256(raw).hexdigest())
+```
+
+> **⚠ Security note:** Because `identity.lock` is committed to the public repo,
+> anyone can compute the default token.  For a private deployment, update the
+> `created` field to a new private timestamp and keep it secret.  Then recompute
+> the token using the formula above.
+
+---
+
+## Remote Access (ngrok)
+
+The server binds `0.0.0.0:1313` so it accepts remote connections.  For a quick
+public demo use [ngrok](https://ngrok.com):
+
+```bash
+# Terminal 1 — start AI-OS
+python aios/main.py --ui none
+
+# Terminal 2 — expose to the internet
+ngrok http 1313
+# → https://xxxx.ngrok.io
+```
+
+See [DEPLOY.md](DEPLOY.md) for Docker, nginx, systemd, and Heroku options.
+
+---
+
+## Running Tests
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
+
+Tests cover: subsystem boot, all 16 menu commands, web API endpoints (including
+admin-password enforcement), identity token derivation, and cloud lifecycle.
 
 ---
 
@@ -200,13 +305,16 @@ pip install windows-curses
 Or use Web mode instead: `python aios/main.py --ui web`
 
 **Q: Where are logs stored?**  
-A: All logs are in-memory. They are visible via the command menus (Menu 15) and the `/api/status` JSON. Persistent log files are on the roadmap.
+A: Log files are written to the `logs/` directory:
+- `logs/aios.log` — all `CommandCenter` console log entries (JSON-lines, rotates at 5 MB)
+- `logs/debug.log` — written when `--debug` is passed
+- `logs/demo.log` — written by `demo.sh`
 
 **Q: How do I shut down cleanly?**  
-A: In the terminal UI, press `q` to exit the UI (the engine keeps running). To stop everything, press `Ctrl+C` in the terminal where you launched `main.py`.
+A: In the terminal UI, press `q` to exit the UI (the engine keeps running). To stop everything, press `Ctrl+C` in the terminal where you launched `main.py`. SIGTERM is also handled (for Docker `docker stop` and systemd).
 
 **Q: What is `identity.lock`?**  
-A: A JSON file that hard-locks the operator identity to "Chris". The `IdentityLock` module reads it at boot. Do not delete it.
+A: A JSON file that hard-locks the operator identity to "Chris". The `IdentityLock` module reads it at boot. Do not delete it. See the "Operator Token" section above for regeneration instructions.
 
 **Q: Can I add my own commands?**  
 A: Yes — edit `aios/command/command_center.py`. The `MENU` dict defines the menu structure, and `_render_status_for()` is the dispatcher. Add a new `elif top == "X"` block.
@@ -215,14 +323,18 @@ A: Yes — edit `aios/command/command_center.py`. The `MENU` dict defines the me
 
 ## Roadmap (what still needs to be built)
 
-See `Buidrhis.md` for the full design spec. Key next steps:
+See `Buidrhis.md` for the full annotated design spec.
 
-- [ ] Persistent log files (write security/audit logs to `VirtualStorage` and optionally to disk)
+- [x] Persistent log files (`logs/aios.log` via `LogWriter`)
+- [x] Automated tests (`tests/` pytest suite)
+- [x] Web API authentication (admin password `7212`)
+- [x] Docker container + docker-compose
+- [x] CI (GitHub Actions)
+- [x] `/api/health`, `/api/debug`, `/api/proc` endpoints
+- [x] `--debug` flag and SIGTERM handler
 - [ ] Real APK — integrate Kivy or BeeWare to produce an Android package
-- [ ] Automated tests (`pytest` suite for each subsystem)
-- [ ] Web UI authentication (login form before `/api/status` is accessible)
-- [ ] Real cloud bridge (allow an optional external API layer on top of the virtual one)
-- [ ] Self-hosting: package as a Docker container so the system can host itself
+- [ ] Real cloud bridge (optional external API layer on top of the virtual one)
+- [ ] Mobile-responsive web UI (CSS media queries)
 
 ---
 

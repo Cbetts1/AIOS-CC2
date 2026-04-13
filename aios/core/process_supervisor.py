@@ -73,7 +73,7 @@ class ProcessSupervisor:
                 "restarts": self._restarts.get(name, 0),
                 "uptime_seconds": uptime,
             }
-        return {"component": "ProcessSupervisor", "processes": result}
+        return {"component": "ProcessSupervisor", "processes": result, "healthy": True}
 
     def list_processes(self) -> list:
         return list(self._registry.keys())

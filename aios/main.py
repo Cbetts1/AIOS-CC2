@@ -3,9 +3,11 @@
 import argparse
 import asyncio
 import os
+import signal
 import sys
 import threading
 import time
+import traceback
 from datetime import datetime, timezone
 
 # Ensure the project root (parent of the aios/ package) is in the Python path
@@ -39,6 +41,8 @@ def parse_args():
                         help="Operator authentication token")
     parser.add_argument("--port", type=int, default=1313,
                         help="Web server port (default: 1313)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable verbose debug output and write logs/debug.log")
     return parser.parse_args()
 
 
@@ -152,6 +156,12 @@ def boot_subsystems():
         sandbox=sandbox,
         cloud=cloud,
     )
+
+    # Attach persistent log writer
+    from aios.core.log_writer import LogWriter
+    log_writer = LogWriter("aios")
+    cc.attach_log_writer(log_writer)
+
     cc.boot()
 
     return {
@@ -192,7 +202,7 @@ def start_web_server(cc, port):
     return srv
 
 
-def endless_loop(subsystems, stop_event):
+def endless_loop(subsystems, stop_event, debug=False):
     """The main endless loop: tick all engines, heartbeat, update state."""
     cc = subsystems["cc"]
     aura = subsystems["aura"]
@@ -214,46 +224,55 @@ def endless_loop(subsystems, stop_event):
         try:
             aura.tick()
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
         try:
             vsensors.tick()
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
         try:
             vcpu.tick()
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
         try:
             bridge.tick()
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
         try:
             proc_writers.tick()
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
         try:
             if cloud and cloud._running:
                 cloud.tick()
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
         try:
             state.set("tick", tick, namespace="system")
             state.set("timestamp", datetime.now(timezone.utc).isoformat(), namespace="system")
         except Exception:
-            pass
+            if debug:
+                traceback.print_exc()
 
-        if now - last_heartbeat >= 5.0:
+        hb_interval = 1.0 if debug else 5.0
+        if now - last_heartbeat >= hb_interval:
             last_heartbeat = now
             try:
                 heartbeat.beat_sync()
             except Exception:
-                pass
+                if debug:
+                    traceback.print_exc()
 
         if not cc._running:
             stop_event.set()
@@ -284,8 +303,23 @@ def main():
     print()
 
     args = parse_args()
+
+    # ── Debug log file ───────────────────────────────────────────────────────
+    if args.debug:
+        logs_dir = os.path.join(os.path.dirname(_here), "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        debug_log_path = os.path.join(logs_dir, "debug.log")
+        print(f"  [DEBUG] Verbose mode ON. Log: {debug_log_path}")
+
     subsystems = boot_subsystems()
     cc = subsystems["cc"]
+
+    # ── SIGTERM handler (Docker stop / systemd stop) ─────────────────────────
+    def _handle_sigterm(signum, frame):
+        print("\n  [SIGNAL] SIGTERM received. Shutting down gracefully...")
+        cc._running = False
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
 
     # Validate operator token if provided on command line
     if args.operator_token:
@@ -316,7 +350,9 @@ def main():
         print("  [CLOUD] Cloud loop started.")
 
     # Start the endless loop thread
-    loop_thread = threading.Thread(target=endless_loop, args=(subsystems, stop_event), daemon=True)
+    loop_thread = threading.Thread(
+        target=endless_loop, args=(subsystems, stop_event, args.debug), daemon=True
+    )
     loop_thread.start()
 
     if args.ui == "terminal":

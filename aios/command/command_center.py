@@ -143,6 +143,11 @@ class CommandCenter:
         self._sandbox = None
         self._cloud = None
         self._console_log = []
+        self._log_writer = None
+
+    def attach_log_writer(self, log_writer) -> None:
+        """Attach a LogWriter so all console log entries are also persisted."""
+        self._log_writer = log_writer
 
     def attach(self, **kwargs) -> None:
         for k, v in kwargs.items():
@@ -174,6 +179,11 @@ class CommandCenter:
         self._console_log.append(entry)
         if len(self._console_log) > 500:
             self._console_log = self._console_log[-250:]
+        if self._log_writer:
+            try:
+                self._log_writer.write({"component": "CommandCenter", "msg": msg})
+            except Exception:
+                pass
 
     def get_banner(self) -> str:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

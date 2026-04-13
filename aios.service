@@ -1,0 +1,25 @@
+# AI-OS systemd service unit
+# Install:
+#   sudo cp aios.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now aios
+#
+# Adjust WorkingDirectory and ExecStart to match your install path.
+
+[Unit]
+Description=AI-OS CC2 Command Center
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aios-cc2
+ExecStart=/usr/bin/python3 aios/main.py --ui none --port 1313
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aios-cc2
+
+[Install]
+WantedBy=multi-user.target

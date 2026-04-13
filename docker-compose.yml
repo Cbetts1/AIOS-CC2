@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  aios:
+    build: .
+    image: aios-cc2:latest
+    container_name: aios-cc2
+    ports:
+      - "1313:1313"
+    volumes:
+      - ./logs:/aios/logs   # persist log files on the host
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:1313/api/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

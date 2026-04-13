@@ -1,48 +1,112 @@
-"""AI-OS Web Server - HTTP server on port 1313 serving web UI."""
+"""AI-OS Web Server - HTTP server on port 1313 serving web UI.
+
+Authentication
+--------------
+Mutating / sensitive endpoints require the admin password supplied in the
+request.  Pass it in one of two ways (either is accepted):
+
+  • HTTP header:   X-Admin-Password: 7212
+  • JSON body key: {"password": "7212", "cmd": "..."}   (POST /api/command)
+  • Query param:   ?password=7212                        (GET  /api/debug)
+
+Protected endpoints:  POST /api/command,  GET /api/debug
+Open endpoints:       GET /api/status, GET /api/heartbeat,
+                      GET /api/health,  GET /api/proc
+"""
 import json
-import os
 import threading
 import time
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+
+_ADMIN_PASSWORD = "7212"
 
 
 class AIWebHandler(SimpleHTTPRequestHandler):
     _command_center = None
     _web_dir = None
+    _start_time = time.time()
 
     def log_message(self, format, *args):
         pass  # Suppress default HTTP logging
 
+    # ── Auth helper ──────────────────────────────────────────────────────────
+
+    def _check_password(self, payload: dict = None, query: dict = None) -> bool:
+        """Return True if the request carries the correct admin password."""
+        # 1. Header check (works for GET and POST)
+        if self.headers.get("X-Admin-Password") == _ADMIN_PASSWORD:
+            return True
+        # 2. JSON body key (POST)
+        if payload and str(payload.get("password", "")) == _ADMIN_PASSWORD:
+            return True
+        # 3. Query param (GET)
+        if query and query.get("password", [""])[0] == _ADMIN_PASSWORD:
+            return True
+        return False
+
+    def _send_forbidden(self):
+        body = json.dumps({"error": "Forbidden: admin password required."}).encode()
+        self.send_response(403)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ── Routing ──────────────────────────────────────────────────────────────
+
     def do_GET(self):
-        if self.path == "/api/status" or self.path == "/api/status/":
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        query = parse_qs(parsed.query)
+
+        if path == "/api/status":
             self._serve_status()
-        elif self.path == "/api/heartbeat":
+        elif path == "/api/heartbeat":
             self._serve_heartbeat()
-        elif self.path == "/api/health" or self.path == "/api/health/":
+        elif path == "/api/health":
             self._serve_health()
-        elif self.path == "/api/debug" or self.path == "/api/debug/":
-            self._serve_debug()
-        elif self.path.startswith("/api/proc"):
+        elif path == "/api/debug":
+            if not self._check_password(query=query):
+                self._send_forbidden()
+            else:
+                self._serve_debug()
+        elif path == "/api/proc":
             self._serve_proc()
         else:
-            # Serve static files from web directory
-            # Note: translate_path() already handles _web_dir, so no os.chdir() needed
+            # Serve static files — translate_path() handles _web_dir, no os.chdir() needed
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/api/command" or self.path == "/api/command/":
+        if self.path.rstrip("/") == "/api/command":
             self._handle_command()
         else:
             self.send_response(404)
             self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers",
+                         "Content-Type, X-Admin-Password")
+        self.end_headers()
+
+    # ── Handlers ─────────────────────────────────────────────────────────────
 
     def _handle_command(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length) if length > 0 else b"{}"
             payload = json.loads(body.decode("utf-8"))
+
+            if not self._check_password(payload=payload):
+                self._send_forbidden()
+                return
+
             cmd = str(payload.get("cmd", "")).strip()
             if not cmd:
                 result_text = "No command provided. Enter a menu number like 1, 1.1, or 11.1"
@@ -64,14 +128,6 @@ class AIWebHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(error)))
             self.end_headers()
             self.wfile.write(error)
-
-    def do_OPTIONS(self):
-        # Allow CORS preflight for the POST endpoint
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
 
     def _serve_status(self):
         try:
@@ -115,6 +171,72 @@ class AIWebHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_health(self):
+        """Readiness / liveness probe — always open, no auth required."""
+        cc = self._command_center
+        uptime = round(time.time() - self._start_time, 1)
+        data = {
+            "status": "OK",
+            "version": "2.0.0-CC2",
+            "uptime_seconds": uptime,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "running": bool(cc and cc._running),
+        }
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_debug(self):
+        """Full StateRegistry dump — requires admin password."""
+        try:
+            data: dict = {}
+            if self._command_center and self._command_center._state:
+                data = self._command_center._state.dump()
+            body = json.dumps(data, default=str).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as exc:
+            error = json.dumps({"error": str(exc)}).encode("utf-8")
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error)))
+            self.end_headers()
+            self.wfile.write(error)
+
+    def _serve_proc(self):
+        """List and read virtual /proc/aios/ files — open, no auth required."""
+        try:
+            data: dict = {"proc_files": []}
+            cc = self._command_center
+            if cc and cc._proc_writers:
+                names = cc._proc_writers.list_procs()
+                data["proc_files"] = names
+                data["entries"] = {
+                    n: cc._proc_writers.read_proc(n) for n in names
+                }
+            body = json.dumps(data, default=str).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as exc:
+            error = json.dumps({"error": str(exc)}).encode("utf-8")
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error)))
+            self.end_headers()
+            self.wfile.write(error)
+
     def translate_path(self, path):
         if self._web_dir:
             path = path.split("?")[0].split("#")[0]
@@ -142,6 +264,7 @@ class AIWebServer:
     def start(self) -> None:
         AIWebHandler._command_center = self._cc
         AIWebHandler._web_dir = self._web_dir
+        AIWebHandler._start_time = time.time()
 
         self._server = _ReusingHTTPServer(("0.0.0.0", self.PORT), AIWebHandler)
         self._running = True
@@ -158,7 +281,10 @@ class AIWebServer:
     def stop(self) -> None:
         self._running = False
         if self._server:
-            self._server.shutdown()
+            try:
+                self._server.server_close()
+            except Exception:
+                pass
 
     def status(self) -> dict:
         return {

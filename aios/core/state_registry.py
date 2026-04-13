@@ -59,6 +59,12 @@ class StateRegistry:
             if namespace in self._store:
                 self._store[namespace] = {}
 
+    @classmethod
+    def reset(cls) -> None:
+        """Reset the singleton for test isolation. Call in test teardown."""
+        with cls._lock:
+            cls._instance = None
+
     def status(self) -> dict:
         with self._store_lock:
             total_keys = sum(len(v) for v in self._store.values())
