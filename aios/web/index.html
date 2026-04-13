@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AI-OS Command Center v2.0-CC2 - Operator: Chris" />
+  <title>AI-OS Command Center</title>
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="top-bar">
+  <span class="logo-text">&#9632; AI-OS COMMAND CENTER</span>
+  <div class="indicator">
+    <span class="dot"></span>
+    <span>ONLINE</span>
+  </div>
+  <div class="indicator">
+    <span class="dot hb"></span>
+    <span>HB</span>
+  </div>
+  <div class="indicator">
+    <span>NET: 10.0.0.0/8</span>
+  </div>
+  <div class="indicator">
+    <span>OP: Chris</span>
+  </div>
+  <div class="spacer"></div>
+  <span id="live-clock">--:--:-- UTC</span>
+</div>
+
+<!-- MAIN APP GRID -->
+<div id="app">
+
+  <!-- LEFT MENU -->
+  <nav id="left-menu" aria-label="Main Navigation">
+    <!-- Built by ui.js -->
+  </nav>
+
+  <!-- CENTER CONSOLE -->
+  <main id="console-area">
+    <div id="console-header">
+      &#9612; CONSOLE OUTPUT &nbsp;|&nbsp; AI-OS v2.0-CC2 &nbsp;|&nbsp; Layer 1-7 ONLINE
+    </div>
+    <div id="console-output" aria-live="polite" aria-label="Console output">
+    </div>
+    <div id="console-input-row">
+      <span class="prompt">CMD&gt;</span>
+      <input id="cmd-input" type="text" autocomplete="off" spellcheck="false"
+             placeholder="Enter command (e.g. 1.1, 3.2, 11.1) ..." aria-label="Command input" />
+      <button id="send-btn">SEND</button>
+    </div>
+  </main>
+
+  <!-- RIGHT DASHBOARD -->
+  <aside id="right-dash" aria-label="System Dashboard">
+
+    <!-- Heartbeat Panel -->
+    <div class="dash-panel">
+      <h3>&#9829; HEARTBEAT</h3>
+      <div id="hb-display">
+        <span id="hb-icon">&#9679;</span>
+        <div id="hb-count">Beat #0</div>
+      </div>
+    </div>
+
+    <!-- System Metrics -->
+    <div class="dash-panel">
+      <h3>&#9776; SYSTEM</h3>
+      <div class="metric-row"><span>Uptime</span><span id="dash-uptime" class="val">--:--:--</span></div>
+      <div class="metric-row"><span>Operator</span><span id="dash-operator" class="val ok">Chris</span></div>
+      <div class="metric-row"><span>Version</span><span id="dash-version" class="val">2.0.0-CC2</span></div>
+      <div class="metric-row"><span>Time</span><span id="dash-ts" class="val">--:--:--</span></div>
+    </div>
+
+    <!-- Layer Status -->
+    <div class="dash-panel">
+      <h3>&#9724; LAYERS 1-7</h3>
+      <div class="layer-grid">
+        <div class="layer-dot"><div id="layer-dot-1" class="ld"></div><span>L1</span></div>
+        <div class="layer-dot"><div id="layer-dot-2" class="ld"></div><span>L2</span></div>
+        <div class="layer-dot"><div id="layer-dot-3" class="ld"></div><span>L3</span></div>
+        <div class="layer-dot"><div id="layer-dot-4" class="ld"></div><span>L4</span></div>
+        <div class="layer-dot"><div id="layer-dot-5" class="ld"></div><span>L5</span></div>
+        <div class="layer-dot"><div id="layer-dot-6" class="ld"></div><span>L6</span></div>
+        <div class="layer-dot"><div id="layer-dot-7" class="ld"></div><span>L7</span></div>
+      </div>
+    </div>
+
+    <!-- Sensors -->
+    <div class="dash-panel">
+      <h3>&#9651; SENSORS</h3>
+      <div class="metric-row"><span>CPU Temp</span><span id="dash-cpu-temp" class="val">--</span></div>
+      <div class="pbar"><div id="pbar-cpu-temp" class="pbar-fill" style="width:42%"></div></div>
+      <div class="metric-row"><span>CPU Load</span><span id="dash-cpu-load" class="val">--</span></div>
+      <div class="pbar"><div id="pbar-cpu-load" class="pbar-fill" style="width:15%"></div></div>
+      <div class="metric-row"><span>Mem Load</span><span id="dash-mem-load" class="val">--</span></div>
+      <div class="pbar"><div id="pbar-mem-load" class="pbar-fill" style="width:30%"></div></div>
+      <div class="metric-row"><span>Power</span><span id="dash-power" class="val">--</span></div>
+    </div>
+
+    <!-- Virtual HW -->
+    <div class="dash-panel">
+      <h3>&#9733; VIRTUAL HW</h3>
+      <div class="metric-row"><span>CPU Cycles</span><span id="dash-cpu-cycles" class="val">0</span></div>
+      <div class="metric-row"><span>RAM</span><span id="dash-mem-size" class="val">64 MB</span></div>
+      <div class="metric-row"><span>Storage Files</span><span id="dash-storage-files" class="val">0</span></div>
+    </div>
+
+    <!-- Network -->
+    <div class="dash-panel">
+      <h3>&#9738; NETWORK</h3>
+      <div class="metric-row"><span>Interfaces</span><span id="dash-net-ifaces" class="val ok">0</span></div>
+      <div class="metric-row"><span>Pkts Sent</span><span id="dash-net-pkts" class="val">0</span></div>
+      <div class="metric-row"><span>Type</span><span class="val ok">VIRTUAL</span></div>
+    </div>
+
+  </aside>
+
+  <!-- STATUS BAR -->
+  <footer id="status-bar" aria-label="System Status Bar">
+    <span class="sb-item ok">AIOS: ONLINE</span>
+    <span class="sb-item ok">L1-7: GREEN</span>
+    <span class="sb-item cyan">HB: #0</span>
+    <span class="sb-item cyan">NET: 10.0.0.0/8</span>
+    <span class="sb-item">OP: Chris</span>
+    <span class="sb-item">VER: 2.0.0-CC2</span>
+  </footer>
+
+</div><!-- /#app -->
+
+<script src="ui.js"></script>
+</body>
+</html>
