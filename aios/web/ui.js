@@ -169,7 +169,7 @@
     [4,"Virtual HW",["CPU Status","Memory","Storage","Sensors","Exec Instr","Mem Dump"]],
     [5,"Network",["Interfaces","Mesh Status","Heartbeat","Pkt Log","Broadcast"]],
     [6,"Security",["Identity","Sec Log","Policy","Permissions","Sandbox"]],
-    [7,"Cloud",["Status","Nodes","Bridge"]],
+    [7,"Cloud",["Cloud Status","List Nodes","Start Cloud","Stop Cloud","Spawn Node","Exec Task","Heartbeat","Storage Info","Event Log"]],
     [8,"Cellular",["Status","Signal","Channels"]],
     [9,"Computer",["Supervisor","Mem Map","ProcWriters","Storage Files"]],
     [10,"AI Systems",["Aura Status","Evolution","Builder Queue","Repair Hist"]],

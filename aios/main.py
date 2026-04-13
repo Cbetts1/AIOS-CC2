@@ -120,8 +120,16 @@ def boot_subsystems():
     print("  [13/14] Sandbox ...")
     sandbox = Sandbox()
 
-    print("  [14/14] CommandCenter ...")
+    print("  [14/15] CommandCenter ...")
     cc = CommandCenter()
+
+    print("  [15/15] CloudController ...")
+    from aios.cloud.cloud_controller import CloudController
+    from aios.cloud.cloud_loop import CloudLoop
+    cloud = CloudController(state_registry=state, mesh=mesh, vcpu=vcpu)
+    cloud.boot()
+    cloud_loop = CloudLoop(cloud_controller=cloud, mesh=mesh)
+
     cc.attach(
         state=state,
         policy=policy,
@@ -140,6 +148,7 @@ def boot_subsystems():
         supervisor=supervisor,
         proc_writers=proc_writers,
         sandbox=sandbox,
+        cloud=cloud,
     )
     cc.boot()
 
@@ -161,6 +170,8 @@ def boot_subsystems():
         "supervisor": supervisor,
         "proc_writers": proc_writers,
         "sandbox": sandbox,
+        "cloud": cloud,
+        "cloud_loop": cloud_loop,
         "cc": cc,
     }
 
@@ -185,6 +196,7 @@ def endless_loop(subsystems, stop_event):
     proc_writers = subsystems["proc_writers"]
     state = subsystems["state"]
     heartbeat = subsystems["heartbeat"]
+    cloud = subsystems.get("cloud")
 
     tick = 0
     last_heartbeat = 0
@@ -215,6 +227,12 @@ def endless_loop(subsystems, stop_event):
 
         try:
             proc_writers.tick()
+        except Exception:
+            pass
+
+        try:
+            if cloud and cloud._running:
+                cloud.tick()
         except Exception:
             pass
 
@@ -279,6 +297,12 @@ def main():
     mesh_thread = threading.Thread(target=run_async_mesh, args=(subsystems,), daemon=True)
     mesh_thread.start()
 
+    # Start the cloud loop (never-exit)
+    cloud_loop = subsystems.get("cloud_loop")
+    if cloud_loop:
+        cloud_loop.start()
+        print("  [CLOUD] Cloud loop started.")
+
     # Start the endless loop thread
     loop_thread = threading.Thread(target=endless_loop, args=(subsystems, stop_event), daemon=True)
     loop_thread.start()
@@ -309,6 +333,8 @@ def main():
         stop_event.set()
 
     web_server.stop()
+    if cloud_loop:
+        cloud_loop.stop()
     print("  AI-OS shutdown complete.")
 
 
