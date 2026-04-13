@@ -383,15 +383,8 @@
     initGestures();
     printBanner();
 
-    // Animate heartbeat icon
-    const hbIcon = $("hb-icon");
-    if (hbIcon) {
-      setInterval(() => {
-        state.heartbeatCount++;
-        const hbCount = $("hb-count");
-        if (hbCount) hbCount.textContent = `Beat #${state.heartbeatCount}`;
-      }, 5000);
-    }
+    // Heartbeat count is updated from server data in fetchStatus/renderDashboard
+    // The hb-icon animation is purely CSS-driven (no JS timer needed)
   }
 
   if (document.readyState === "loading") {
