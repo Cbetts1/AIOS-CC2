@@ -436,35 +436,6 @@ class CommandCenter:
                 lines += self._cloud_storage_lines()
             elif sub == "9":
                 lines += self._cloud_log_lines()
-        # Cloud Systems
-        elif top == "7":
-            if sub == "1":
-                lines.append("  Cloud Layer    : VIRTUAL (internal only)")
-                lines.append("  Provider       : AI-OS Private Cloud")
-                lines.append("  Network        : 10.0.0.0/8 (virtual)")
-                lines.append("  External calls : BLOCKED by LegalCortex")
-                lines.append("  Status         : SIMULATED — no real cloud connected")
-                lines.append("  Note: To add a real cloud, extend bridge/host_bridge.py")
-            elif sub == "2":
-                nodes = []
-                if self._mesh:
-                    nodes = self._mesh.list_nodes()
-                lines.append(f"  Virtual cloud nodes ({len(nodes)} total):")
-                for n in nodes:
-                    lines.append(f"    [{n['name']}] addr={n['addr']} rx={n['rx']} tx={n['tx']}")
-                if not nodes:
-                    lines.append("  No cloud nodes registered.")
-            elif sub == "3":
-                lines.append("  Cloud Bridge Report")
-                lines.append("  ─────────────────────────────────────")
-                lines.append("  All cloud traffic is VIRTUAL.")
-                lines.append("  Real external network calls are blocked")
-                lines.append("  by the LegalCortex and PermissionContainer.")
-                if self._bridge:
-                    st = self._bridge.status()
-                    lines.append(f"  HostBridge uptime : {st.get('uptime_seconds', 0)}s")
-                    lines.append(f"  Sandboxed         : {st.get('sandboxed', False)}")
-
         # Cellular Systems
         elif top == "8":
             if sub == "1":

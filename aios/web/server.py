@@ -2,6 +2,7 @@
 import json
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -19,10 +20,15 @@ class AIWebHandler(SimpleHTTPRequestHandler):
             self._serve_status()
         elif self.path == "/api/heartbeat":
             self._serve_heartbeat()
+        elif self.path == "/api/health" or self.path == "/api/health/":
+            self._serve_health()
+        elif self.path == "/api/debug" or self.path == "/api/debug/":
+            self._serve_debug()
+        elif self.path.startswith("/api/proc"):
+            self._serve_proc()
         else:
             # Serve static files from web directory
-            if self._web_dir:
-                os.chdir(self._web_dir)
+            # Note: translate_path() already handles _web_dir, so no os.chdir() needed
             super().do_GET()
 
     def do_POST(self):
