@@ -149,29 +149,32 @@ class TerminalUI:
         elif key == curses.KEY_DOWN:
             self._selected_menu = min(len(self._menu_items) - 1, self._selected_menu + 1)
         elif key == curses.KEY_ENTER or key == 10 or key == 13:
-            num, name = self._menu_items[self._selected_menu]
-            if self._cc:
-                result = self._cc.handle_command(num)
+            # If the user has typed something in the buffer, submit that
+            if self._input_buffer and self._cc:
+                result = self._cc.handle_command(self._input_buffer)
                 with self._lock:
+                    self._console_lines.append(f"> {self._input_buffer}")
                     for line in result.split("\n"):
                         self._console_lines.append(line)
                     if len(self._console_lines) > 300:
                         self._console_lines = self._console_lines[-150:]
-            self._status_msg = f"Executed: {num}. {name}"
+                self._status_msg = f"CMD: {self._input_buffer}"
+                self._input_buffer = ""
+            else:
+                # No typed input — execute the highlighted menu item
+                num, name = self._menu_items[self._selected_menu]
+                if self._cc:
+                    result = self._cc.handle_command(num)
+                    with self._lock:
+                        for line in result.split("\n"):
+                            self._console_lines.append(line)
+                        if len(self._console_lines) > 300:
+                            self._console_lines = self._console_lines[-150:]
+                self._status_msg = f"Executed: {num}. {name}"
         elif key == curses.KEY_BACKSPACE or key == 127:
             self._input_buffer = self._input_buffer[:-1]
         elif 32 <= key < 127:
-            if key == ord('\n') or chr(key) == '\r':
-                if self._input_buffer and self._cc:
-                    result = self._cc.handle_command(self._input_buffer)
-                    with self._lock:
-                        self._console_lines.append(f"> {self._input_buffer}")
-                        for line in result.split("\n"):
-                            self._console_lines.append(line)
-                    self._status_msg = f"CMD: {self._input_buffer}"
-                    self._input_buffer = ""
-            else:
-                self._input_buffer += chr(key)
+            self._input_buffer += chr(key)
         return True
 
     def _ticker(self) -> None:

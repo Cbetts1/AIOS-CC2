@@ -372,6 +372,167 @@ class CommandCenter:
                 for k, v in st.items():
                     lines.append(f"  {k}: {v}")
 
+        # Cloud Systems
+        elif top == "7":
+            if sub == "1":
+                lines.append("  Cloud Layer    : VIRTUAL (internal only)")
+                lines.append("  Provider       : AI-OS Private Cloud")
+                lines.append("  Network        : 10.0.0.0/8 (virtual)")
+                lines.append("  External calls : BLOCKED by LegalCortex")
+                lines.append("  Status         : SIMULATED — no real cloud connected")
+                lines.append("  Note: To add a real cloud, extend bridge/host_bridge.py")
+            elif sub == "2":
+                nodes = []
+                if self._mesh:
+                    nodes = self._mesh.list_nodes()
+                lines.append(f"  Virtual cloud nodes ({len(nodes)} total):")
+                for n in nodes:
+                    lines.append(f"    [{n['name']}] addr={n['addr']} rx={n['rx']} tx={n['tx']}")
+                if not nodes:
+                    lines.append("  No cloud nodes registered.")
+            elif sub == "3":
+                lines.append("  Cloud Bridge Report")
+                lines.append("  ─────────────────────────────────────")
+                lines.append("  All cloud traffic is VIRTUAL.")
+                lines.append("  Real external network calls are blocked")
+                lines.append("  by the LegalCortex and PermissionContainer.")
+                if self._bridge:
+                    st = self._bridge.status()
+                    lines.append(f"  HostBridge uptime : {st.get('uptime_seconds', 0)}s")
+                    lines.append(f"  Sandboxed         : {st.get('sandboxed', False)}")
+
+        # Cellular Systems
+        elif top == "8":
+            if sub == "1":
+                lines.append("  Virtual Cellular  : SIMULATED")
+                lines.append("  Technology        : Virtual LTE/5G (no real RF)")
+                lines.append("  Network           : Internal mesh (10.0.0.0/8)")
+                lines.append("  Signal            : N/A (virtual environment)")
+                lines.append("  Note: Cellular simulation uses NodeMesh as the")
+                lines.append("        transport layer. No real radio hardware.")
+            elif sub == "2":
+                import random as _rand
+                rssi = round(-60 - _rand.uniform(0, 30), 1)
+                lines.append(f"  Signal Simulation")
+                lines.append(f"  ─────────────────────────────────────")
+                lines.append(f"  RSSI (simulated) : {rssi} dBm")
+                lines.append(f"  Band             : Virtual-LTE-B1")
+                lines.append(f"  Technology       : 5G-NR (simulated)")
+                lines.append(f"  Status           : CONNECTED (virtual)")
+            elif sub == "3":
+                lines.append("  Channel Report")
+                lines.append("  ─────────────────────────────────────")
+                if self._mesh:
+                    for n in self._mesh.list_nodes():
+                        lines.append(f"  CH-{n['name']:10s}  rx={n['rx']:4d}  tx={n['tx']:4d}")
+                else:
+                    lines.append("  No channels available (NodeMesh not attached).")
+
+        # Computer Systems
+        elif top == "9":
+            if sub == "1":
+                st = self._supervisor.status() if self._supervisor else {}
+                procs = st.get("processes", {})
+                lines.append(f"  Registered processes: {len(procs)}")
+                if procs:
+                    for name, info in procs.items():
+                        lines.append(f"  [{name}] running={info.get('running')} restarts={info.get('restarts', 0)}")
+                else:
+                    lines.append("  No processes currently registered with supervisor.")
+            elif sub == "2":
+                if self._memory:
+                    report = self._memory.map_report()
+                    lines.append(f"  Total allocated: {self._memory.total_allocated_kb()} KB")
+                    for name, info in report.items():
+                        lines.append(f"  [{name}] {info['size_kb']} KB  r={info['reads']} w={info['writes']}")
+            elif sub == "3":
+                if self._proc_writers:
+                    st = self._proc_writers.status()
+                    for k, v in st.items():
+                        lines.append(f"  {k}: {v}")
+            elif sub == "4":
+                if self._vstorage:
+                    files = self._vstorage.list()
+                    lines.append(f"  Virtual files ({len(files)} total):")
+                    for f in files[:20]:
+                        lines.append(f"  {f}")
+                    if len(files) > 20:
+                        lines.append(f"  ... and {len(files)-20} more")
+
+        # AI Systems
+        elif top == "10":
+            if self._aura:
+                st = self._aura.status()
+                if sub == "1":
+                    lines.append(f"  AuraEngine: {st.get('status', 'UNKNOWN')}")
+                    lines.append(f"  Ticks     : {st.get('tick_count', 0)}")
+                    lines.append(f"  Uptime    : {st.get('uptime_seconds', 0)}s")
+                    for name, eng in st.get("sub_engines", {}).items():
+                        ok = "✓" if eng.get("healthy") else "✗"
+                        lines.append(f"  {ok} {name}: ticks={eng.get('tick_count', 0)}")
+                elif sub == "2":
+                    log = self._aura.evolution.get_evolution_log()
+                    if log:
+                        for entry in log[-10:]:
+                            lines.append(f"  [{entry.get('timestamp', entry.get('cycle', '?'))}] {entry}")
+                    else:
+                        lines.append("  No evolution cycles recorded yet.")
+                elif sub == "3":
+                    queue = self._aura.builder.get_queue()
+                    done = self._aura.builder.get_completed()
+                    lines.append(f"  Queue depth: {len(queue)}")
+                    lines.append(f"  Completed  : {len(done)}")
+                    for item in done[-5:]:
+                        lines.append(f"  ✓ {item.get('target', '?')} at {item.get('built_at', '?')}")
+                elif sub == "4":
+                    history = self._aura.repair.get_repair_history()
+                    if history:
+                        for r in history[-10:]:
+                            lines.append(f"  {r.get('component', '?')} -> {r.get('action', '?')} at {r.get('repaired_at', '?')}")
+                    else:
+                        lines.append("  No repairs performed yet.")
+
+        # Logs & Audit
+        elif top == "15":
+            if sub == "1" and self._security:
+                log = self._security.get_security_log(limit=20)
+                for e in log:
+                    lines.append(f"  [{e.get('timestamp','')}] {e.get('type','')} {e.get('operator','')}")
+            elif sub == "2" and self._policy:
+                log = self._policy.get_audit_log(limit=20)
+                for e in log:
+                    lines.append(f"  [{e.get('timestamp','')}] {e.get('action','')} -> {'ALLOW' if e.get('allowed') else 'DENY'}")
+            elif sub == "3" and self._aura:
+                log = self._aura.legal.get_audit_log(limit=20)
+                for e in log:
+                    lines.append(f"  [{e.get('audited_at','')}] {e.get('action','')} -> {'✓' if e.get('compliant') else '✗'}")
+            elif sub == "4" and self._aura:
+                log = self._aura.evolution.get_evolution_log()
+                for e in log[-15:]:
+                    lines.append(f"  {e}")
+            elif sub == "5":
+                lines.append("  ── FULL AUDIT DUMP ──")
+                if self._security:
+                    lines.append(f"  Security events: {len(self._security.get_security_log(limit=9999))}")
+                if self._policy:
+                    lines.append(f"  Policy events  : {len(self._policy.get_audit_log(limit=9999))}")
+                if self._aura:
+                    lines.append(f"  Legal events   : {len(self._aura.legal.get_audit_log(limit=9999))}")
+                lines.append(f"  Console entries: {len(self._console_log)}")
+
+        # Shutdown
+        elif top == "16":
+            if sub == "1":
+                lines.append("  Graceful shutdown requires operator token.")
+                lines.append("  Run: python aios/main.py --operator-token <token>")
+                lines.append("  Or use: cc.shutdown(token) in Python.")
+            elif sub == "2":
+                lines.append("  EMERGENCY HALT — operator authentication required.")
+                lines.append("  This will terminate all subsystems immediately.")
+            elif sub == "3":
+                lines.append("  Restart Loop: endless loop will re-initialise on next boot.")
+                lines.append("  Stop the process (Ctrl+C) and relaunch: python aios/main.py")
+
         # Diagnostics
         elif top == "11":
             if sub == "1":
@@ -381,6 +542,45 @@ class CommandCenter:
                 lines.append(f"  Healthy subsystems: {healthy}/{total}")
                 lines.append(f"  System uptime: {self._uptime_str()}")
                 lines.append("  Diagnostic: ALL SYSTEMS NOMINAL")
+            elif sub == "2":
+                full = self.get_status_dict()
+                for name, comp in full.items():
+                    if isinstance(comp, dict) and "healthy" in comp:
+                        ok = "✓" if comp.get("healthy") else "✗"
+                        lines.append(f"  {ok} {name}")
+            elif sub == "3":
+                lines.append("  Error Log (last 10 security events):")
+                if self._security:
+                    for e in self._security.get_security_log(limit=10):
+                        lines.append(f"  [{e.get('timestamp','')}] {e.get('type','')} {e.get('reason','')}")
+            elif sub == "4":
+                lines.append(f"  Uptime     : {self._uptime_str()}")
+                if self._aura:
+                    st = self._aura.status()
+                    lines.append(f"  Aura ticks : {st.get('tick_count', 0)}")
+                if self._vsensors:
+                    r = self._vsensors.read_all()
+                    lines.append(f"  CPU temp   : {r.get('cpu_temp', '?')}°C")
+                    lines.append(f"  CPU load   : {r.get('cpu_load', '?')}%")
+
+        # Maintenance
+        elif top == "12":
+            if sub == "1" and self._state:
+                lines.append("  Clearing default namespace...")
+                self._state.clear_namespace("default")
+                lines.append("  Done.")
+            elif sub == "2" and self._vcpu:
+                self._vcpu.reset()
+                lines.append("  VirtualCPU reset. PC=0x0000, registers zeroed.")
+            elif sub == "3" and self._aura:
+                self._aura.repair.tick()
+                lines.append("  Repair scan complete.")
+                history = self._aura.repair.get_repair_history()
+                lines.append(f"  Repairs in history: {len(history)}")
+            elif sub == "4" and self._memory:
+                name = f"dynamic_{int(time.time()) % 10000}"
+                self._memory.allocate(name, 512)
+                lines.append(f"  Allocated 512 KB region: '{name}'")
 
         # Documentation
         elif top == "14":
@@ -417,6 +617,11 @@ class CommandCenter:
                             lines.append(f"  VIOLATION: {v.get('action','')} at {v.get('timestamp','')}")
                     else:
                         lines.append("  No violations recorded.")
+                elif sub == "4":
+                    lines.append("  Enter action name to check compliance.")
+                    lines.append("  Blocked actions:")
+                    for a in sorted(legal.BLOCKED_ACTIONS):
+                        lines.append(f"    ✗ {a}")
 
         if len(lines) == 2:
             lines.append(f"  {sub_name}: OPERATIONAL")

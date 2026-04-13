@@ -25,6 +25,49 @@ class AIWebHandler(SimpleHTTPRequestHandler):
                 os.chdir(self._web_dir)
             super().do_GET()
 
+    def do_POST(self):
+        if self.path == "/api/command" or self.path == "/api/command/":
+            self._handle_command()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def _handle_command(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            import json as _json
+            payload = _json.loads(body.decode("utf-8"))
+            cmd = str(payload.get("cmd", "")).strip()
+            if not cmd:
+                result_text = "No command provided. Enter a menu number like 1, 1.1, or 11.1"
+            elif self._command_center:
+                result_text = self._command_center.handle_command(cmd)
+            else:
+                result_text = f"Command received: {cmd} (CommandCenter not attached)"
+            resp = _json.dumps({"result": result_text, "cmd": cmd}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(resp)
+        except Exception as exc:
+            error = json.dumps({"error": str(exc)}).encode("utf-8")
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error)))
+            self.end_headers()
+            self.wfile.write(error)
+
+    def do_OPTIONS(self):
+        # Allow CORS preflight for the POST endpoint
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
     def _serve_status(self):
         try:
             if self._command_center:
