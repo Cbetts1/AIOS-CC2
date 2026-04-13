@@ -746,9 +746,9 @@ class CommandCenter:
         # Shutdown
         elif top == "16":
             if sub == "1":
-                lines.append("  Graceful shutdown requires operator token.")
-                lines.append("  Run: python aios/main.py --operator-token <token>")
-                lines.append("  Or use: cc.shutdown(token) in Python.")
+                lines.append("  Graceful shutdown requires admin password.")
+                lines.append("  Use: cc.shutdown('7212') in Python, or")
+                lines.append("  run: python aios/main.py --operator-token 7212")
             elif sub == "2":
                 lines.append("  EMERGENCY HALT — operator authentication required.")
                 lines.append("  This will terminate all subsystems immediately.")

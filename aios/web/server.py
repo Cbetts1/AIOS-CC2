@@ -1,5 +1,7 @@
 """AI-OS Web Server - HTTP server on port 1313 serving web UI."""
 import json
+import os
+import socket
 import threading
 import time
 import urllib.parse
@@ -24,7 +26,7 @@ def _is_port_available(host: str, port: int) -> bool:
 class AIWebHandler(SimpleHTTPRequestHandler):
     _command_center = None
     _web_dir = None
-    _operator_token = None  # SHA-256 hex; None = auth disabled
+    _operator_token = None  # admin password; None = auth disabled
 
     def log_message(self, format, *args):
         pass  # Suppress default HTTP logging
@@ -49,7 +51,7 @@ class AIWebHandler(SimpleHTTPRequestHandler):
         return self._get_request_token() == expected
 
     def _serve_401(self):
-        body = json.dumps({"error": "Unauthorized — operator token required"}).encode("utf-8")
+        body = json.dumps({"error": "Unauthorized — admin password required"}).encode("utf-8")
         self.send_response(401)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -241,7 +243,7 @@ class AIWebServer:
         self._web_dir = str(Path(__file__).parent)
 
     def set_operator_token(self, token: str) -> None:
-        """Set the operator token required to access /api/* endpoints."""
+        """Set the admin password required to access /api/* endpoints."""
         AIWebHandler._operator_token = token
 
     def start(self) -> None:
