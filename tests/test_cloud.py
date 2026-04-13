@@ -41,10 +41,9 @@ def test_list_nodes(cloud):
 
 def test_exec_task_auto_spawns(cloud):
     result = cloud.exec_task("echo", {"msg": "hello"})
-    # Should have auto-spawned a node
-    assert "error" not in result or "task_id" not in result or True
-    # Minimal check: result is a dict
     assert isinstance(result, dict)
+    # Should either complete a task or report an error — never None
+    assert "task_id" in result or "error" in result or "status" in result
 
 
 def test_stop_node(cloud):
