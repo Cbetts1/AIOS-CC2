@@ -8,10 +8,12 @@ import threading
 import time
 from datetime import datetime
 
-# Ensure the project root is in the Python path
+# Ensure the project root (parent of the aios/ package) is in the Python path
 _here = os.path.dirname(os.path.abspath(__file__))
-if _here not in sys.path:
-    sys.path.insert(0, _here)
+_root = os.path.dirname(_here)  # one level up from aios/ = repo root
+for _p in (_root, _here):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 ASCII_LOGO = r"""
   ╔══════════════════════════════════════════════════════╗
@@ -245,9 +247,7 @@ def endless_loop(subsystems, stop_event):
         if now - last_heartbeat >= 5.0:
             last_heartbeat = now
             try:
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(heartbeat.beat())
-                loop.close()
+                heartbeat.beat_sync()
             except Exception:
                 pass
 
@@ -282,6 +282,14 @@ def main():
     args = parse_args()
     subsystems = boot_subsystems()
     cc = subsystems["cc"]
+
+    # Validate operator token if provided on command line
+    if args.operator_token:
+        identity = subsystems["identity"]
+        if identity.is_operator(args.operator_token):
+            print("  [AUTH] Operator token accepted.")
+        else:
+            print("  [AUTH] WARNING: Provided operator token is invalid. Continuing as unauthenticated.")
 
     print()
     print("  ═══════════════════════════════════════")

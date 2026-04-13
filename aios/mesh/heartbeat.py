@@ -55,6 +55,18 @@ class HeartbeatSystem:
                 pass
         return pulse
 
+    def beat_sync(self) -> dict:
+        """Thread-safe synchronous heartbeat tick (no async mesh broadcast)."""
+        self._beat_count += 1
+        self._last_beat_time = time.time()
+        self._last_beat_ts = datetime.utcnow().isoformat() + "Z"
+        return {
+            "type": "heartbeat",
+            "beat": self._beat_count,
+            "timestamp": self._last_beat_ts,
+            "uptime": round(time.time() - self._init_time, 1),
+        }
+
     def last_beat(self) -> dict:
         return {
             "beat_count": self._beat_count,

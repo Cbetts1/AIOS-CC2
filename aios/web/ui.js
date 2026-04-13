@@ -320,12 +320,26 @@
       if (!val) return;
       input.value = "";
       appendConsole(`> ${val}`, "cmd");
-      // Send to API
-      fetch(`/api/status`).then(r => r.json()).then(data => {
-        appendConsole(`  Command acknowledged: ${val}`, "ok");
-      }).catch(() => {
-        appendConsole(`  [offline] Command stored: ${val}`, "warn");
-      });
+      // POST command to backend and display real result
+      fetch("/api/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd: val }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            appendConsole(`  [ERROR] ${data.error}`, "err");
+          } else {
+            const lines = (data.result || "").split("\n");
+            lines.forEach(l => {
+              if (l.trim()) appendConsole(l, "ok");
+            });
+          }
+        })
+        .catch(err => {
+          appendConsole(`  [offline] Could not reach server: ${err.message}`, "warn");
+        });
     };
 
     input.addEventListener("keydown", e => {
