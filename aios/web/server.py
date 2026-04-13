@@ -14,6 +14,8 @@ Open endpoints:       GET /api/status, GET /api/heartbeat,
                       GET /api/health,  GET /api/proc
 """
 import json
+import os
+import socket
 import threading
 import time
 from datetime import datetime, timezone
@@ -22,6 +24,19 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 _ADMIN_PASSWORD = "7212"
+
+# Default port — override with the AIOS_PORT environment variable or --port flag.
+_DEFAULT_PORT = int(os.environ.get("AIOS_PORT", 1313))
+
+
+def _is_port_available(host: str, port: int) -> bool:
+    """Return True if *port* on *host* is free to bind right now."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind((host, port))
+            return True
+        except OSError:
+            return False
 
 
 class AIWebHandler(SimpleHTTPRequestHandler):
@@ -252,21 +267,35 @@ class _ReusingHTTPServer(HTTPServer):
 
 
 class AIWebServer:
-    PORT = 1313
+    PORT = _DEFAULT_PORT
 
     def __init__(self, command_center=None):
         self._cc = command_center
         self._server = None
         self._thread = None
         self._running = False
+        self._bound = False
         self._web_dir = str(Path(__file__).parent)
 
     def start(self) -> None:
+        """Bind the HTTP server and start serving in a background thread.
+
+        Raises ``OSError`` if the port is already in use so callers can
+        report a clear error and fall back gracefully.
+        """
         AIWebHandler._command_center = self._cc
         AIWebHandler._web_dir = self._web_dir
         AIWebHandler._start_time = time.time()
 
+        if not _is_port_available("0.0.0.0", self.PORT):
+            raise OSError(
+                f"[Errno 98] Address already in use — port {self.PORT} is taken. "
+                f"Stop the process using that port or set a different port with "
+                f"--port or the AIOS_PORT environment variable."
+            )
+
         self._server = _ReusingHTTPServer(("0.0.0.0", self.PORT), AIWebHandler)
+        self._bound = True
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -279,19 +308,27 @@ class AIWebServer:
                 pass
 
     def stop(self) -> None:
+        """Stop the server and release the bound port."""
         self._running = False
         if self._server:
             try:
                 self._server.server_close()
             except Exception:
                 pass
+            self._server = None
+        self._bound = False
+
+    def is_bound(self) -> bool:
+        """Return True if the server successfully bound to its port."""
+        return self._bound
 
     def status(self) -> dict:
         return {
             "component": "AIWebServer",
             "port": self.PORT,
             "running": self._running,
+            "bound": self._bound,
             "url": f"http://localhost:{self.PORT}",
             "web_dir": self._web_dir,
-            "healthy": self._running,
+            "healthy": self._bound and self._running,
         }
