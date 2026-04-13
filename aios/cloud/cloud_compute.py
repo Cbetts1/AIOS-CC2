@@ -9,7 +9,7 @@ Responsibilities:
 """
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class CloudCompute:
@@ -51,7 +51,7 @@ class CloudCompute:
                 "task_id": task_id,
                 "type": task_type,
                 "payload": payload,
-                "submitted_at": datetime.utcnow().isoformat() + "Z",
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
             },
         }
         # Also pass instruction at top-level for vcpu_exec convenience
@@ -65,7 +65,7 @@ class CloudCompute:
             "task_id": task_id,
             "type": task_type,
             "target_node": target_node,
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat(),
             "status": result.get("status", "unknown"),
         })
         if len(self._task_log) > 300:

@@ -9,7 +9,7 @@ import socket
 import struct
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 PORT_BASE = 19000
 PORT_RANGE = 1000
@@ -100,7 +100,7 @@ class CloudNetwork:
             self._registry[node_id] = {
                 "port": port,
                 "addr": addr,
-                "registered_at": datetime.utcnow().isoformat() + "Z",
+                "registered_at": datetime.now(timezone.utc).isoformat(),
             }
 
     def unregister_node(self, node_id: str) -> None:
@@ -141,7 +141,7 @@ class CloudNetwork:
             return {"error": str(exc), "node_id": node_id}
 
         self._msg_count += 1
-        ts = datetime.utcnow().isoformat() + "Z"
+        ts = datetime.now(timezone.utc).isoformat()
         self._message_log.append({
             "to": node_id, "type": msg.get("type"), "ts": ts
         })

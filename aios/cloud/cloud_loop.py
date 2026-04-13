@@ -12,7 +12,7 @@ The loop only stops when stop() is called (e.g. during operator shutdown).
 import asyncio
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class CloudLoop:
@@ -114,7 +114,7 @@ class CloudLoop:
                 "type": "cloud_sync",
                 "node_count": node_count,
                 "cloud_running": running,
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
             }
             # NodeMesh.broadcast is a coroutine; spin up a minimal event loop
             loop = asyncio.new_event_loop()
@@ -126,7 +126,7 @@ class CloudLoop:
     # ── Logging ──────────────────────────────────────────────────────────────
 
     def _log(self, msg: str) -> None:
-        entry = {"msg": msg, "ts": datetime.utcnow().isoformat() + "Z"}
+        entry = {"msg": msg, "ts": datetime.now(timezone.utc).isoformat()}
         self._loop_log.append(entry)
         if len(self._loop_log) > 200:
             self._loop_log = self._loop_log[-100:]

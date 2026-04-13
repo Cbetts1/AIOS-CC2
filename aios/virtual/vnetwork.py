@@ -1,7 +1,7 @@
 """AI-OS Virtual Network - Simulates private internal network 10.0.0.0/8."""
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class VirtualNetwork:
@@ -24,7 +24,7 @@ class VirtualNetwork:
         self._interfaces[name] = {
             "ip": ip,
             "queue": asyncio.Queue(maxsize=256),
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "rx": 0,
             "tx": 0,
         }
@@ -71,7 +71,7 @@ class VirtualNetwork:
         self._packet_log.append({
             "src": src, "dst": dst,
             "size": len(payload),
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat(),
         })
         if len(self._packet_log) > 500:
             self._packet_log = self._packet_log[-250:]

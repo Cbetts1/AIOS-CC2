@@ -1,7 +1,7 @@
 """AI-OS Node Mesh - Internal mesh network for inter-subsystem communication."""
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class NodeMesh:
@@ -24,7 +24,7 @@ class NodeMesh:
             "queue": asyncio.Queue(maxsize=512),
             "rx": 0,
             "tx": 0,
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         return addr
 
@@ -36,7 +36,7 @@ class NodeMesh:
 
     async def broadcast(self, msg: dict) -> int:
         delivered = 0
-        ts = datetime.utcnow().isoformat() + "Z"
+        ts = datetime.now(timezone.utc).isoformat()
         packet = {"type": "broadcast", "msg": msg, "timestamp": ts}
         for name, node in self._nodes.items():
             try:
@@ -55,7 +55,7 @@ class NodeMesh:
         dst_node = self._nodes.get(dst)
         if dst_node is None:
             return False
-        ts = datetime.utcnow().isoformat() + "Z"
+        ts = datetime.now(timezone.utc).isoformat()
         packet = {"type": "unicast", "src": src, "dst": dst, "msg": msg, "timestamp": ts}
         try:
             dst_node["queue"].put_nowait(packet)

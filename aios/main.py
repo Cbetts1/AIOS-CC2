@@ -6,7 +6,7 @@ import os
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Ensure the project root (parent of the aios/ package) is in the Python path
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -183,8 +183,12 @@ def start_web_server(cc, port):
     from aios.web.server import AIWebServer
     srv = AIWebServer(command_center=cc)
     srv.PORT = port
-    srv.start()
-    print(f"  [WEB] Server started: http://localhost:{port}")
+    try:
+        srv.start()
+        print(f"  [WEB] Server started: http://localhost:{port}")
+    except OSError as e:
+        print(f"  [WEB] WARNING: Could not bind to port {port}: {e}")
+        print(f"  [WEB] Web UI unavailable. Use --port to choose a different port.")
     return srv
 
 
@@ -240,7 +244,7 @@ def endless_loop(subsystems, stop_event):
 
         try:
             state.set("tick", tick, namespace="system")
-            state.set("timestamp", datetime.utcnow().isoformat() + "Z", namespace="system")
+            state.set("timestamp", datetime.now(timezone.utc).isoformat(), namespace="system")
         except Exception:
             pass
 
@@ -276,7 +280,7 @@ def run_async_mesh(subsystems):
 
 def main():
     print(ASCII_LOGO)
-    print(f"  Boot time: {datetime.utcnow().isoformat()}Z")
+    print(f"  Boot time: {datetime.now(timezone.utc).isoformat()}")
     print()
 
     args = parse_args()
@@ -318,7 +322,16 @@ def main():
     if args.ui == "terminal":
         from aios.terminal.ui_main import TerminalUI
         ui = TerminalUI(command_center=cc)
-        ui.start()
+        try:
+            ui.start()
+        except Exception as e:
+            print(f"\n  [UI] Terminal UI failed: {e}")
+            print("  [UI] Falling back to background mode. Press Ctrl+C to stop.")
+            try:
+                while cc._running:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\n  Interrupted by operator.")
         stop_event.set()
 
     elif args.ui == "web":

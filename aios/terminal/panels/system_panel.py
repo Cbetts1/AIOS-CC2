@@ -1,6 +1,6 @@
 """AI-OS Terminal Panels - System status panel."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SystemPanel:
@@ -10,7 +10,7 @@ class SystemPanel:
     def render(self, width: int = 60) -> list:
         lines = []
         lines.append("┌─ SYSTEM STATUS " + "─" * (width - 18) + "┐")
-        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         lines.append(f"│  Timestamp : {now:<{width-16}}│")
 
         if self._cc:

@@ -1,6 +1,6 @@
 """AI-OS APK Bootloader Simulation."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class APKBootloader:
@@ -28,7 +28,7 @@ class APKBootloader:
         for step in self.BOOT_SEQUENCE:
             entry = {
                 "msg": step,
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(),
                 "elapsed": round(time.time() - self._boot_time, 3),
             }
             self._boot_log.append(entry)

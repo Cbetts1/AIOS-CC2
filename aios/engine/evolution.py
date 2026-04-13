@@ -1,6 +1,6 @@
 """AI-OS Evolution Engine - Tracks component evolution and versions."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class EvolutionEngine:
@@ -22,7 +22,7 @@ class EvolutionEngine:
     def _run_evolution_cycle(self) -> None:
         snapshot = {
             "cycle": self._cycle,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "components_tracked": len(self._versions),
         }
         self._evolution_log.append(snapshot)
@@ -46,7 +46,7 @@ class EvolutionEngine:
         record = {
             "component": component,
             "version": version_str,
-            "evolved_at": datetime.utcnow().isoformat() + "Z",
+            "evolved_at": datetime.now(timezone.utc).isoformat(),
             "cycle": self._cycle,
         }
         self._evolution_log.append(record)

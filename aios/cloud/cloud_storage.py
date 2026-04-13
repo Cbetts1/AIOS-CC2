@@ -8,7 +8,7 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -68,7 +68,7 @@ class CloudStorage:
             ns = self._cache.setdefault(namespace, {})
             ns[key] = {
                 "value": value,
-                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             self._write_count += 1
             self._flush(namespace)

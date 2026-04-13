@@ -9,7 +9,7 @@ The API is intentionally thin: it validates that a controller is attached,
 records call counts, and delegates everything to CloudController.
 """
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class CloudAPI:
@@ -50,7 +50,7 @@ class CloudAPI:
         return {
             "nodes": nodes,
             "count": len(nodes),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     # ── Task dispatch ────────────────────────────────────────────────────────

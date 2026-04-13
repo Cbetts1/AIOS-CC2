@@ -1,6 +1,6 @@
 """AI-OS Builder Engine - Builds virtual components."""
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class BuilderEngine:
@@ -31,7 +31,7 @@ class BuilderEngine:
         return {
             "target": target,
             "status": "success",
-            "built_at": datetime.utcnow().isoformat() + "Z",
+            "built_at": datetime.now(timezone.utc).isoformat(),
             "duration_ms": round((time.time() % 1) * 200 + 50, 2),
             "artifacts": [f"{target}.bin", f"{target}.map"],
         }

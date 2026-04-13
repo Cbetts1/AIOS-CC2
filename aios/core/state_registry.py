@@ -1,7 +1,7 @@
 """AI-OS State Registry - Thread-safe in-memory state store."""
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class StateRegistry:
@@ -21,7 +21,7 @@ class StateRegistry:
             ns = self._store.setdefault(namespace, {})
             ns[key] = {
                 "value": value,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "updated_at": time.time(),
             }
 

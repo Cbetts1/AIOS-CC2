@@ -1,7 +1,7 @@
 """AI-OS APK Chat Interface - Async chat with Au-Ra engine."""
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ChatInterface:
@@ -37,7 +37,7 @@ class ChatInterface:
         entry = {
             "role": "user",
             "content": msg,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "id": len(self._messages),
         }
         self._messages.append(entry)
@@ -46,7 +46,7 @@ class ChatInterface:
             "role": "assistant",
             "name": "Au-Ra",
             "content": response,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "id": len(self._messages),
         }
         self._messages.append(ai_entry)
