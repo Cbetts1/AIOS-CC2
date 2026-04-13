@@ -56,9 +56,9 @@ class RepairEngine:
                 action = "state_reset"
 
             if action == "state_reset" and self._state:
-                ns, _, key = component.partition(":")
+                namespace, _, key = component.partition(":")
                 self._state.set(key, {"status": "repaired", "repair_time": time.time()},
-                                namespace=ns)
+                                namespace=namespace)
 
         result = {
             "component": component,
@@ -93,8 +93,8 @@ class RepairEngine:
     def diagnose(self, component: str) -> dict:
         fault = False
         if self._state:
-            ns, _, key = component.partition(":")
-            val = self._state.get(key, namespace=ns)
+            namespace, _, key = component.partition(":")
+            val = self._state.get(key, namespace=namespace)
             if val is not None:
                 val_str = str(val).lower()
                 fault = any(ind in val_str for ind in self.FAULT_INDICATORS)

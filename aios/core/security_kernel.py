@@ -111,7 +111,8 @@ class SecurityKernel:
         # Append to JSONL file if configured
         if self._log_file is not None:
             try:
-                # Rotate when the file exceeds the size limit
+                # Single-generation rotation (rename to .1.jsonl when exceeding size).
+                # TODO: upgrade to logging.handlers.RotatingFileHandler for multi-gen rotation.
                 if (self._log_file.exists()
                         and self._log_file.stat().st_size > self._LOG_ROTATE_BYTES):
                     rotated = self._log_file.with_suffix(".1.jsonl")
