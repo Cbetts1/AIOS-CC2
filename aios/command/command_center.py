@@ -1,4 +1,5 @@
 """AI-OS Command Center - Main command and control interface."""
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -146,6 +147,8 @@ class CommandCenter:
         self._cloud = None
         self._console_log = []
         self._trace_file = None   # optional: path to write append-only trace log
+        self._log_file: Path = None
+        self._log_rotate_bytes: int = 5 * 1024 * 1024  # 5 MB
 
     def attach(self, **kwargs) -> None:
         for k, v in kwargs.items():
@@ -166,6 +169,12 @@ class CommandCenter:
                 )
         except OSError:
             self._trace_file = None
+
+    def set_log_file(self, path: str) -> None:
+        """Configure file-based JSONL console logging to *path*."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self._log_file = p
 
     def _write_trace(self, msg: str) -> None:
         if not self._trace_file:
@@ -288,8 +297,16 @@ class CommandCenter:
     def handle_command(self, cmd: str) -> str:
         cmd = cmd.strip()
 
-        # ── Plain-text cloud commands (cloud start / stop / status / etc.) ──
+        # ── Built-in shell shortcuts ─────────────────────────────────────────
         lower = cmd.lower()
+        if lower in ("help", "?", "h"):
+            return self._handle_help()
+        if lower in ("status", "stat", "s"):
+            return self._handle_1_1() if hasattr(self, "_handle_1_1") else self._render_status_for("1", "1", "System Status", "Full System Report")
+        if lower in ("q", "quit", "exit"):
+            return "  Type 16.1 for graceful shutdown, or press Ctrl+C."
+
+        # ── Plain-text cloud commands (cloud start / stop / status / etc.) ──
         if lower.startswith("cloud"):
             result = self._handle_cloud_text(cmd)
             self._write_trace(f"CMD   {cmd!r} -> {result[:80].replace(chr(10), ' ')}")
@@ -299,8 +316,12 @@ class CommandCenter:
         top = parts[0] if parts else ""
         sub = parts[1] if len(parts) > 1 else ""
 
-        if top not in self.MENU:
-            msg = f"Unknown command: '{cmd}'. Enter 1-16 for main menu."
+        if not top or top not in self.MENU:
+            if top:
+                hint = "  Quick tips: type 1-16 for menus, '1.1' for sub-options, 'help' for a reference card."
+                msg = f"  Unknown command: '{cmd}'.\n{hint}"
+            else:
+                msg = "  Unknown command (empty input). Enter 1-16 to navigate menus, or 'help' for a quick-reference card."
             self._write_trace(f"CMD   {cmd!r} -> UNKNOWN")
             return msg
 
@@ -326,6 +347,39 @@ class CommandCenter:
         result = self._generic_handler(top, sub)
         self._write_trace(f"CMD   {cmd} -> {result[:80].replace(chr(10), ' ')}")
         return result
+
+    def _handle_help(self) -> str:
+        """Return a quick-reference card for the shell."""
+        lines = [
+            "",
+            "  ╔══════════════════════════════════════════════════════════╗",
+            "  ║        AI-OS COMMAND CENTER — QUICK REFERENCE           ║",
+            "  ╠══════════════════════════════════════════════════════════╣",
+            "  ║  Navigation                                              ║",
+            "  ║    1-16         Open a top-level menu section            ║",
+            "  ║    <N>.<M>      Run sub-option  e.g. 1.1, 4.2, 7.5      ║",
+            "  ╠══════════════════════════════════════════════════════════╣",
+            "  ║  Shortcuts                                               ║",
+            "  ║    help / ?     Show this reference card                 ║",
+            "  ║    status / s   Full system status report  (= 1.1)       ║",
+            "  ║    cloud <sub>  Cloud commands (start/stop/status/nodes) ║",
+            "  ║    q / quit     Exit terminal (system keeps running)     ║",
+            "  ╠══════════════════════════════════════════════════════════╣",
+            "  ║  Menu sections                                           ║",
+        ]
+        for k, (name, _) in self.MENU.items():
+            lines.append(f"  ║    {k:>2}  {name:<50}║")
+        lines += [
+            "  ╠══════════════════════════════════════════════════════════╣",
+            "  ║  Terminal UI keys                                        ║",
+            "  ║    UP/DOWN      Navigate menu list (when not typing)     ║",
+            "  ║    UP/DOWN      Scroll command history (when typing)     ║",
+            "  ║    ENTER        Execute highlighted menu item or command ║",
+            "  ║    Backspace    Delete last character in command input   ║",
+            "  ╚══════════════════════════════════════════════════════════╝",
+            "",
+        ]
+        return "\n".join(lines)
 
     def _handle_cloud_text(self, cmd: str) -> str:
         """Dispatch plain-text cloud commands from terminal / web input."""
@@ -935,24 +989,22 @@ class CommandCenter:
         return list(self._console_log[-limit:])
 
     def run_terminal(self) -> None:
-        """Run interactive terminal menu loop."""
+        """Run interactive terminal menu loop (plain-text fallback, no curses)."""
         print(self.get_banner())
         print()
+        print("  Type a menu number (1-16), sub-option (e.g. 1.1), 'help', or 'q' to exit.")
+        history: list = []
         while self._running:
-            print("\n  MAIN MENU")
-            print("  " + "─" * 50)
-            for k, (name, _) in self.MENU.items():
-                print(f"  {k:>2}. {name}")
-            print()
             try:
-                raw = input("  Enter selection (or 'q' to quit): ").strip()
+                raw = input("  CMD> ").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n  Interrupted. Type 16.1 for graceful shutdown.")
                 break
+            if raw == "":
+                continue
+            history.append(raw)
             if raw.lower() in ("q", "quit", "exit"):
                 print("  Exiting terminal. System continues running.")
                 break
-            if raw == "":
-                continue
             result = self.handle_command(raw)
             print(result)
