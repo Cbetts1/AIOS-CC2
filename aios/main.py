@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Ensure the project root (parent of the aios/ package) is in the Python path
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -83,9 +84,7 @@ def boot_subsystems():
     print(f"         Operator: {identity.get_operator()} | Level: {identity.get_level()}")
 
     # Authenticate the security kernel using the identity lock file
-    _identity_lock_path = str(
-        __import__("pathlib").Path(__file__).parent / "identity" / "identity.lock"
-    )
+    _identity_lock_path = str(Path(__file__).parent / "identity" / "identity.lock")
     try:
         _auth_token = security.authenticate(_identity_lock_path)
         print(f"         SecurityKernel authenticated (token: {_auth_token[:12]}...)")
@@ -133,7 +132,7 @@ def boot_subsystems():
 
     # Register a coroutine factory that properly activates and runs the heartbeat
     async def _heartbeat_runner():
-        heartbeat._running = True
+        heartbeat.activate()
         await heartbeat._run()
 
     supervisor.register("heartbeat", _heartbeat_runner)

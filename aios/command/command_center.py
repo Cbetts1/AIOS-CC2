@@ -464,7 +464,7 @@ class CommandCenter:
                 msg = {"type": "operator_broadcast", "from": "CommandCenter",
                        "ts": datetime.now(timezone.utc).isoformat(), "msg": "Operator ping"}
                 if self._mesh:
-                    count = self._mesh.broadcast_sync(msg) if hasattr(self._mesh, "broadcast_sync") else 0
+                    count = self._mesh.broadcast_sync(msg)
                     lines.append(f"  Broadcast sent to {count} mesh node(s).")
                 else:
                     lines.append("  NodeMesh not attached.")

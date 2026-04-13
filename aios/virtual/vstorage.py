@@ -25,8 +25,12 @@ class VirtualStorage:
             self._load_from_disk()
 
     def _safe_name(self, path: str) -> str:
-        """Convert a virtual path to a safe filename (replaces / with __)."""
-        return path.lstrip("/").replace("/", "__").replace("\\", "__") or "_root_"
+        """Convert a virtual path to a safe filename within persist_dir."""
+        # Strip the virtual path to just the basename-like component and replace
+        # separators to avoid any directory traversal into the real filesystem.
+        safe = path.replace("\\", "/").replace("/", "__").replace("..", "__")
+        safe = safe.lstrip("_").lstrip(".") or "_root_"
+        return safe
 
     def _load_from_disk(self) -> None:
         """Load all previously persisted virtual files from disk."""

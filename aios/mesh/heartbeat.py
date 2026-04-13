@@ -25,6 +25,10 @@ class HeartbeatSystem:
         self._running = True
         self._task = asyncio.ensure_future(self._run())
 
+    def activate(self) -> None:
+        """Set running flag without creating a task (call before launching _run() externally)."""
+        self._running = True
+
     def stop(self) -> None:
         self._running = False
         if self._task and not self._task.done():
