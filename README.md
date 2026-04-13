@@ -163,9 +163,25 @@ python aios/main.py [--ui terminal|web|none] [--port PORT] [--operator-token TOK
   --ui terminal        Launch curses terminal UI (default)
   --ui web             Launch web server only; open http://localhost:PORT
   --ui none            Background mode (engine runs, no UI)
-  --port 1313          Web server port (default: 1313)
+  --port 1313          Web server port (default: 1313 or $AIOS_PORT env var)
   --operator-token T   Validate an operator token at startup
   --trace-file PATH    Write append-only event/command trace to PATH
+```
+
+The web server port can also be set via the `AIOS_PORT` environment variable
+(the `--port` flag takes precedence if both are given):
+
+```bash
+# Termux / Linux / Mac
+export AIOS_PORT=8080
+python aios/main.py --ui web
+
+# One-liner
+AIOS_PORT=8080 python aios/main.py --ui web
+
+# start.sh respects AIOS_PORT automatically
+export AIOS_PORT=8080
+bash start.sh web
 ```
 
 To generate your operator token:

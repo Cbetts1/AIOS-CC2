@@ -1,5 +1,7 @@
 """AI-OS Policy Engine - Permission and access control."""
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 class PolicyViolation(Exception):
@@ -38,9 +40,34 @@ class PolicyEngine:
         "process_kill": RESTRICTED,
     }
 
+    _LOG_ROTATE_BYTES = 10 * 1024 * 1024  # 10 MB
+
     def __init__(self):
         self._custom_policies = {}
         self._audit_log = []
+        self._log_file: Path = None
+
+    def set_log_file(self, path: str) -> None:
+        """Configure file-based policy audit logging.
+
+        Replays the last 500 entries from an existing log on startup.
+        """
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self._log_file = p
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as fh:
+                    lines = fh.readlines()
+                for line in lines[-500:]:
+                    line = line.strip()
+                    if line:
+                        try:
+                            self._audit_log.append(json.loads(line))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     def _get_identity_level(self, identity: dict) -> int:
         role = identity.get("role", "public")
@@ -74,6 +101,18 @@ class PolicyEngine:
         self._audit_log.append(event)
         if len(self._audit_log) > 1000:
             self._audit_log = self._audit_log[-500:]
+        # Append to JSONL file if configured
+        if self._log_file is not None:
+            try:
+                # Single-generation rotation.
+                # TODO: upgrade to logging.handlers.RotatingFileHandler for multi-gen rotation.
+                if (self._log_file.exists()
+                        and self._log_file.stat().st_size > self._LOG_ROTATE_BYTES):
+                    self._log_file.replace(self._log_file.with_suffix(".1.jsonl"))
+                with open(self._log_file, "a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(event) + "\n")
+            except Exception:
+                pass
         if not allowed:
             required = self._custom_policies.get(
                 action, self.ACTION_POLICY.get(action, self.OPERATOR_ONLY)

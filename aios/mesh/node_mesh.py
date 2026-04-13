@@ -90,6 +90,24 @@ class NodeMesh:
             for n, nd in self._nodes.items()
         ]
 
+    def broadcast_sync(self, msg: dict) -> int:
+        """Synchronous broadcast using put_nowait — safe to call from any thread."""
+        delivered = 0
+        ts = datetime.now(timezone.utc).isoformat()
+        packet = {"type": "broadcast", "msg": msg, "timestamp": ts}
+        for name, node in self._nodes.items():
+            try:
+                node["queue"].put_nowait(packet)
+                node["rx"] += 1
+                delivered += 1
+            except Exception:
+                pass
+        self._messages_broadcast += 1
+        self._message_log.append({"type": "broadcast_sync", "ts": ts, "delivered": delivered})
+        if len(self._message_log) > 500:
+            self._message_log = self._message_log[-250:]
+        return delivered
+
     def status(self) -> dict:
         return {
             "component": "NodeMesh",

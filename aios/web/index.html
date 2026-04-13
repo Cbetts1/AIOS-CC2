@@ -6,8 +6,67 @@
   <meta name="description" content="AI-OS Command Center v2.0-CC2 - Operator: Chris" />
   <title>AI-OS Command Center</title>
   <link rel="stylesheet" href="ui.css" />
+  <style>
+    /* Login overlay */
+    #login-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+    #login-box {
+      background: #0a0f0a;
+      border: 1px solid #00ff88;
+      padding: 2rem 2.5rem;
+      min-width: 320px;
+      font-family: monospace;
+      color: #00ff88;
+      text-align: center;
+    }
+    #login-box h2 { margin: 0 0 1rem; font-size: 1rem; letter-spacing: 2px; }
+    #login-box p  { font-size: 0.75rem; color: #aaa; margin-bottom: 1.2rem; }
+    #token-input {
+      width: 100%;
+      background: #000;
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      font-family: monospace;
+      font-size: 0.85rem;
+      padding: 0.5rem;
+      box-sizing: border-box;
+      margin-bottom: 0.8rem;
+      outline: none;
+    }
+    #login-btn {
+      background: #00ff88;
+      color: #000;
+      border: none;
+      font-family: monospace;
+      font-size: 0.85rem;
+      font-weight: bold;
+      padding: 0.5rem 1.5rem;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    #login-btn:hover { background: #00cc66; }
+    #login-error { color: #ff4444; font-size: 0.75rem; margin-top: 0.6rem; min-height: 1em; }
+  </style>
 </head>
 <body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay">
+  <div id="login-box">
+    <h2>&#9632; AI-OS AUTHENTICATION</h2>
+    <p>Enter your operator token to access the Command Center.</p>
+    <input id="token-input" type="password" placeholder="Operator token (hex)" autocomplete="off" />
+    <button id="login-btn">AUTHENTICATE</button>
+    <div id="login-error"></div>
+  </div>
+</div>
 
 <!-- TOP BAR -->
 <div id="top-bar">
