@@ -31,6 +31,8 @@ class CloudLoop:
         self._last_sync = 0.0
         self._init_time = time.time()
         self._loop_log: list = []
+        # Persistent asyncio event loop created lazily in _run() (thread-local)
+        self._sync_loop: asyncio.AbstractEventLoop = None
 
     # ── Attachment ───────────────────────────────────────────────────────────
 
@@ -61,6 +63,8 @@ class CloudLoop:
     def _run(self) -> None:
         """The never-exit loop.  Runs until stop() sets _running = False."""
         self._log("CloudLoop started")
+        # Create a persistent event loop for mesh sync — reused every cycle
+        self._sync_loop = asyncio.new_event_loop()
 
         while self._running:
             now = time.time()
@@ -81,6 +85,12 @@ class CloudLoop:
 
             time.sleep(self.TICK_INTERVAL)
 
+        if self._sync_loop is not None:
+            try:
+                self._sync_loop.close()
+            except Exception:
+                pass
+            self._sync_loop = None
         self._log("CloudLoop stopped")
 
     # ── Per-iteration work ───────────────────────────────────────────────────
@@ -116,8 +126,9 @@ class CloudLoop:
                 "cloud_running": running,
                 "ts": datetime.now(timezone.utc).isoformat(),
             }
-            # Use synchronous broadcast to avoid spinning up a new event loop
-            self._mesh.broadcast_sync(payload)
+            # Reuse the persistent event loop created in _run()
+            if self._sync_loop is not None and not self._sync_loop.is_closed():
+                self._sync_loop.run_until_complete(self._mesh.broadcast(payload))
         except Exception:
             pass
 

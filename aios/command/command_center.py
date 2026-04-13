@@ -1,6 +1,8 @@
 """AI-OS Command Center - Main command and control interface."""
+import json
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 class CommandCenter:
@@ -143,6 +145,27 @@ class CommandCenter:
         self._sandbox = None
         self._cloud = None
         self._console_log = []
+        self._log_file: Path = None
+        self._log_rotate_bytes = 10 * 1024 * 1024  # 10 MB
+
+    def set_log_file(self, path: str) -> None:
+        """Configure file-based console logging.  Replays recent entries on startup."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self._log_file = p
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as fh:
+                    lines = fh.readlines()
+                for line in lines[-200:]:
+                    line = line.strip()
+                    if line:
+                        try:
+                            self._console_log.append(json.loads(line))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     def attach(self, **kwargs) -> None:
         for k, v in kwargs.items():
@@ -174,6 +197,18 @@ class CommandCenter:
         self._console_log.append(entry)
         if len(self._console_log) > 500:
             self._console_log = self._console_log[-250:]
+        # Append to JSONL file if configured
+        if self._log_file is not None:
+            try:
+                # Single-generation rotation.
+                # TODO: upgrade to logging.handlers.RotatingFileHandler for multi-gen rotation.
+                if (self._log_file.exists()
+                        and self._log_file.stat().st_size > self._log_rotate_bytes):
+                    self._log_file.replace(self._log_file.with_suffix(".1.jsonl"))
+                with open(self._log_file, "a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(entry) + "\n")
+            except Exception:
+                pass
 
     def get_banner(self) -> str:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
