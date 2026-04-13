@@ -289,4 +289,32 @@ See `Buidrhis.md` for the full design spec. Key next steps:
 
 ---
 
+## Roadmap — Upgrading to a Real System
+
+The current AIOS-CC2 is a fully self-contained **simulation** running in Python.
+Below is the phased plan to evolve it into a production-grade OS environment.
+
+### Phase 1 — Harden the current core (near-term)
+- [ ] Replace in-memory `VirtualStorage` with a real SQLite or file-backed store
+- [ ] Use Python `logging.handlers.RotatingFileHandler` for all JSONL log files (multi-generation rotation)
+- [ ] Add `asyncio`-native subsystems (replace `threading` where feasible)
+- [ ] CI/CD: add GitHub Actions to auto-run `pytest` on every push/PR
+- [ ] 100 % test coverage for `CommandCenter` command handlers
+
+### Phase 2 — Real hardware access (medium-term)
+- [ ] Replace `VirtualSensors` with `psutil`-backed real CPU/RAM/disk readings
+- [ ] Replace `VirtualNetwork` with real socket layer (bind/listen on loopback or LAN)
+- [ ] Replace `VirtualStorage` with POSIX filesystem (with quota + permission checks)
+- [ ] Connect `HostBridge` to real `subprocess`-based process control
+
+### Phase 3 — Real distribution (long-term)
+- [ ] Package as a standalone executable (`PyInstaller` / `Nuitka`) for Linux, macOS, Windows
+- [ ] Build an Android APK using Kivy or BeeWare (replaces `aios/apk/`)
+- [ ] Expose a gRPC or REST API so external clients can interact with AI-OS
+- [ ] Integrate a real LLM backend (OpenAI / local Ollama) for `AuraEngine` reasoning
+- [ ] Container image: `docker build` → `docker run` with volume-mounted persistence
+- [ ] Multi-operator support with JWT-based authentication replacing `IdentityLock`
+
+---
+
 *AI-OS v2.0.0-CC2 — Operator: Chris*

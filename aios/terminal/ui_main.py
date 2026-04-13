@@ -13,8 +13,11 @@ class TerminalUI:
         self._console_lines = []
         self._selected_menu = 0
         self._input_buffer = ""
-        self._status_msg = "Ready"
+        self._status_msg = "Ready — type 'help' for a reference card"
         self._lock = threading.Lock()
+        # Command history: list of previously submitted commands
+        self._history: list = []
+        self._history_pos: int = -1   # -1 = not browsing history
         self._menu_items = [
             ("1", "System Status"),
             ("2", "Layer Control"),
@@ -123,7 +126,9 @@ class TerminalUI:
 
     def draw_status_bar(self, scr, max_y: int, max_x: int) -> None:
         now = datetime.now().strftime("%H:%M:%S")
-        bar = f" AI-OS | {now} | {self._status_msg} | UP/DOWN: menu | ENTER: select | q: quit "
+        typing = bool(self._input_buffer)
+        nav_hint = "UP/DOWN: history" if typing else "UP/DOWN: menu"
+        bar = f" AI-OS | {now} | {self._status_msg} | {nav_hint} | ENTER: run | ?: help | q: quit "
         bar = bar[:max_x - 1]
         scr.attron(curses.color_pair(3) | curses.A_BOLD)
         try:
@@ -143,24 +148,54 @@ class TerminalUI:
 
     def handle_input(self, key: int) -> bool:
         if key == ord('q') or key == ord('Q'):
-            return False
+            # Only quit if no text is being typed
+            if not self._input_buffer:
+                return False
+            self._input_buffer += chr(key)
         elif key == curses.KEY_UP:
-            self._input_buffer = ""  # clear typed buffer when navigating menu
-            self._selected_menu = max(0, self._selected_menu - 1)
+            if self._input_buffer or self._history_pos >= 0:
+                # Navigate command history upward
+                if self._history:
+                    if self._history_pos < 0:
+                        # Start browsing from the most recent entry
+                        self._history_pos = len(self._history) - 1
+                    elif self._history_pos > 0:
+                        self._history_pos -= 1
+                    self._input_buffer = self._history[self._history_pos]
+            else:
+                # No text: navigate the menu up
+                self._selected_menu = max(0, self._selected_menu - 1)
         elif key == curses.KEY_DOWN:
-            self._input_buffer = ""  # clear typed buffer when navigating menu
-            self._selected_menu = min(len(self._menu_items) - 1, self._selected_menu + 1)
+            if self._history_pos >= 0:
+                # Navigate command history downward
+                if self._history_pos < len(self._history) - 1:
+                    self._history_pos += 1
+                    self._input_buffer = self._history[self._history_pos]
+                else:
+                    # Past the end of history — clear input
+                    self._history_pos = -1
+                    self._input_buffer = ""
+            elif not self._input_buffer:
+                # No text: navigate the menu down
+                self._selected_menu = min(len(self._menu_items) - 1, self._selected_menu + 1)
         elif key == curses.KEY_ENTER or key == 10 or key == 13:
             # If the user has typed something in the buffer, submit that
             if self._input_buffer and self._cc:
-                result = self._cc.handle_command(self._input_buffer)
+                cmd = self._input_buffer
+                result = self._cc.handle_command(cmd)
+                # Save to history (avoid duplicate consecutive entries)
+                if not self._history or self._history[-1] != cmd:
+                    self._history.append(cmd)
+                    if len(self._history) > 100:
+                        self._history = self._history[-100:]
+                self._history_pos = -1
                 with self._lock:
-                    self._console_lines.append(f"> {self._input_buffer}")
+                    self._console_lines.append(f"> {cmd}")
                     for line in result.split("\n"):
                         self._console_lines.append(line)
                     if len(self._console_lines) > 300:
                         self._console_lines = self._console_lines[-150:]
-                self._status_msg = f"CMD: {self._input_buffer}"
+                self._status_msg = f"CMD: {cmd}"
                 self._input_buffer = ""
             else:
                 # No typed input — execute the highlighted menu item
@@ -175,8 +210,13 @@ class TerminalUI:
                 self._status_msg = f"Executed: {num}. {name}"
         elif key == curses.KEY_BACKSPACE or key == 127:
             self._input_buffer = self._input_buffer[:-1]
+            self._history_pos = -1
+        elif key == 27:  # Escape — clear input buffer / cancel history browsing
+            self._input_buffer = ""
+            self._history_pos = -1
         elif 32 <= key < 127:
             self._input_buffer += chr(key)
+            self._history_pos = -1
         return True
 
     def _ticker(self) -> None:
@@ -187,7 +227,7 @@ class TerminalUI:
                     beat = hb.last_beat()
                     count = beat.get("beat_count", 0)
                     with self._lock:
-                        self._status_msg = f"HB#{count} | Ready"
+                        self._status_msg = f"HB#{count} | type 'help' for commands"
             time.sleep(5)
 
     def start(self) -> None:
