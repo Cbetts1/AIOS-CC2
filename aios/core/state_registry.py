@@ -59,6 +59,51 @@ class StateRegistry:
             if namespace in self._store:
                 self._store[namespace] = {}
 
+    def flush_to_file(self, path: str) -> bool:
+        """Atomically persist the entire registry to a JSON file.
+
+        Returns True on success, False on failure.
+        """
+        import copy
+        import json
+        from pathlib import Path
+        p = Path(path)
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with self._store_lock:
+                data = copy.deepcopy(self._store)
+            tmp = p.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, default=str, indent=2)
+            tmp.replace(p)
+            return True
+        except Exception:
+            try:
+                tmp = p.with_suffix(".tmp")
+                if tmp.exists():
+                    tmp.unlink()
+            except Exception:
+                pass
+            return False
+
+    def load_from_file(self, path: str) -> bool:
+        """Load registry state from a JSON file.  Returns True on success."""
+        import json
+        from pathlib import Path
+        p = Path(path)
+        if not p.exists():
+            return False
+        try:
+            with open(p, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                with self._store_lock:
+                    self._store = data
+                return True
+            return False
+        except Exception:
+            return False
+
     def status(self) -> dict:
         with self._store_lock:
             total_keys = sum(len(v) for v in self._store.values())

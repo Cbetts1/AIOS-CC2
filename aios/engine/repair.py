@@ -12,6 +12,14 @@ class RepairEngine:
         self._repairs_done = []
         self._last_scan_time = None
         self._last_tick = None
+        # Optional callbacks: component_name -> callable() for restart
+        self._restart_callbacks: dict = {}
+        # Escalation log for persistent unresolved faults
+        self._escalations: list = []
+
+    def register_restart_callback(self, component: str, callback) -> None:
+        """Register a zero-argument callable that restarts the named component."""
+        self._restart_callbacks[component] = callback
 
     def tick(self) -> None:
         self._tick_count += 1
@@ -34,20 +42,53 @@ class RepairEngine:
 
     def repair(self, component: str) -> dict:
         diag = self.diagnose(component)
+        action = "no_action"
+        if diag["fault_detected"]:
+            # Try restart callback first; fall back to state_reset
+            cb = self._restart_callbacks.get(component)
+            if cb is not None:
+                try:
+                    cb()
+                    action = "restart_engine"
+                except Exception:
+                    action = "state_reset"
+            else:
+                action = "state_reset"
+
+            if action == "state_reset" and self._state:
+                ns, _, key = component.partition(":")
+                self._state.set(key, {"status": "repaired", "repair_time": time.time()},
+                                namespace=ns)
+
         result = {
             "component": component,
             "repaired_at": datetime.now(timezone.utc).isoformat(),
             "diagnosis": diag,
-            "action": "state_reset" if diag["fault_detected"] else "no_action",
+            "action": action,
             "success": True,
         }
-        if diag["fault_detected"] and self._state:
-            ns, _, key = component.partition(":")
-            self._state.set(key, {"status": "repaired", "repair_time": time.time()}, namespace=ns)
         self._repairs_done.append(result)
         if len(self._repairs_done) > 100:
             self._repairs_done = self._repairs_done[-50:]
         return result
+
+    def escalate_to_operator(self, component: str, reason: str) -> dict:
+        """Record a persistent fault that could not be auto-repaired."""
+        entry = {
+            "component": component,
+            "reason": reason,
+            "escalated_at": datetime.now(timezone.utc).isoformat(),
+            "resolved": False,
+        }
+        self._escalations.append(entry)
+        if len(self._escalations) > 50:
+            self._escalations = self._escalations[-25:]
+        if self._state:
+            self._state.set(f"escalation:{component}", entry, namespace="repair")
+        return entry
+
+    def get_escalations(self) -> list:
+        return list(self._escalations)
 
     def diagnose(self, component: str) -> dict:
         fault = False
@@ -72,6 +113,7 @@ class RepairEngine:
             "component": "RepairEngine",
             "tick_count": self._tick_count,
             "repairs_done": len(self._repairs_done),
+            "escalations": len(self._escalations),
             "last_scan": self._last_scan_time,
             "last_tick": self._last_tick,
             "healthy": True,

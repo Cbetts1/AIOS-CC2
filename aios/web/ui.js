@@ -15,6 +15,8 @@
     touchStartTime: 0,
     longPressTimer: null,
     rootMode: false,
+    token: sessionStorage.getItem("aios_token") || "",
+    sseActive: false,
   };
 
   /* ── DOM helpers ───────────────────────────────────── */
@@ -37,10 +39,110 @@
   setInterval(updateClock, 1000);
   updateClock();
 
+  /* ── Auth helpers ──────────────────────────────────── */
+  function authUrl(url) {
+    if (!state.token) return url;
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}token=${encodeURIComponent(state.token)}`;
+  }
+
+  async function authFetch(url, opts) {
+    const headers = Object.assign({}, (opts || {}).headers || {});
+    if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+    return fetch(url, Object.assign({}, opts, { headers }));
+  }
+
+  /* ── Login overlay ─────────────────────────────────── */
+  function showLogin(msg) {
+    const overlay = $("login-overlay");
+    if (overlay) {
+      overlay.style.display = "flex";
+      const err = $("login-error");
+      if (err) err.textContent = msg || "";
+    }
+  }
+
+  function hideLogin() {
+    const overlay = $("login-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+
+  async function tryLogin() {
+    const input = $("token-input");
+    const token = input ? input.value.trim() : "";
+    if (!token) { showLogin("Please enter your operator token."); return; }
+    try {
+      const resp = await fetch(authUrl(`/api/login?token=${encodeURIComponent(token)}`));
+      const data = await resp.json();
+      if (data.ok) {
+        state.token = token;
+        sessionStorage.setItem("aios_token", token);
+        hideLogin();
+        initSSE();
+        appendConsole("  [AUTH] Operator authenticated.", "ok");
+      } else {
+        showLogin("Invalid token. Try again.");
+      }
+    } catch (err) {
+      showLogin("Login failed: " + err.message);
+    }
+  }
+
+  function initLoginForm() {
+    const btn = $("login-btn");
+    const input = $("token-input");
+    if (btn) btn.addEventListener("click", tryLogin);
+    if (input) input.addEventListener("keydown", e => { if (e.key === "Enter") tryLogin(); });
+  }
+
+  /* ── SSE / polling ─────────────────────────────────── */
+  function initSSE() {
+    if (state.sseActive) return;
+    const url = authUrl("/api/stream");
+    try {
+      const es = new EventSource(url);
+      es.onmessage = evt => {
+        try {
+          const data = JSON.parse(evt.data);
+          state.status = data;
+          state.lastUpdate = Date.now();
+          renderDashboard(data);
+        } catch (_) {}
+      };
+      es.onerror = () => {
+        state.sseActive = false;
+        es.close();
+        // Fall back to polling
+        setTimeout(startPolling, 2000);
+      };
+      es.onopen = () => {
+        state.sseActive = true;
+        appendConsole("  [SSE] Real-time stream connected.", "info");
+      };
+    } catch (_) {
+      startPolling();
+    }
+  }
+
+  let _pollTimer = null;
+  function startPolling() {
+    if (state.sseActive) return;
+    if (_pollTimer) return;
+    _pollTimer = setInterval(fetchStatus, state.refreshInterval);
+    fetchStatus();
+  }
+
   /* ── API Fetch ─────────────────────────────────────── */
   async function fetchStatus() {
     try {
-      const resp = await fetch("/api/status", { cache: "no-store" });
+      const resp = await authFetch("/api/status", { cache: "no-store" });
+      if (resp.status === 401) {
+        state.token = "";
+        sessionStorage.removeItem("aios_token");
+        showLogin("Session expired — please re-authenticate.");
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+        return;
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       state.status = data;
@@ -51,9 +153,6 @@
       appendConsole(`[ERROR] Status fetch failed: ${err.message}`, "err");
     }
   }
-
-  setInterval(fetchStatus, state.refreshInterval);
-  fetchStatus();
 
   /* ── Console ───────────────────────────────────────── */
   function appendConsole(msg, type) {
@@ -321,13 +420,22 @@
       input.value = "";
       appendConsole(`> ${val}`, "cmd");
       // POST command to backend and display real result
-      fetch("/api/command", {
+      authFetch("/api/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cmd: val }),
       })
-        .then(r => r.json())
+        .then(r => {
+          if (r.status === 401) {
+            state.token = "";
+            sessionStorage.removeItem("aios_token");
+            showLogin("Session expired — please re-authenticate.");
+            return null;
+          }
+          return r.json();
+        })
         .then(data => {
+          if (!data) return;
           if (data.error) {
             appendConsole(`  [ERROR] ${data.error}`, "err");
           } else {
@@ -395,10 +503,16 @@
     buildMenu();
     initInput();
     initGestures();
+    initLoginForm();
     printBanner();
 
-    // Heartbeat count is updated from server data in fetchStatus/renderDashboard
-    // The hb-icon animation is purely CSS-driven (no JS timer needed)
+    // If we already have a stored token, attempt SSE immediately;
+    // otherwise show the login overlay.
+    if (state.token) {
+      initSSE();
+    } else {
+      showLogin();
+    }
   }
 
   if (document.readyState === "loading") {

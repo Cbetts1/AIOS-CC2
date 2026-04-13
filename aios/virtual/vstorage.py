@@ -79,3 +79,60 @@ class VirtualStorage:
             "uptime_seconds": round(time.time() - self._init_time, 1),
             "healthy": True,
         }
+
+    def save_to_file(self, path: str) -> bool:
+        """Atomically persist the virtual filesystem to a JSON file.
+
+        File contents are base64-encoded so arbitrary byte payloads survive.
+        Returns True on success, False on failure.
+        """
+        import base64
+        import json
+        from pathlib import Path
+        p = Path(path)
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            serialized = {
+                fp: base64.b64encode(data).decode("ascii")
+                for fp, data in self._store.items()
+            }
+            payload = {"store": serialized, "metadata": self._metadata}
+            tmp = p.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, indent=2, default=str)
+            tmp.replace(p)
+            return True
+        except Exception:
+            try:
+                tmp = p.with_suffix(".tmp")
+                if tmp.exists():
+                    tmp.unlink()
+            except Exception:
+                pass
+            return False
+
+    def load_from_file(self, path: str) -> bool:
+        """Load virtual filesystem from a JSON file.  Returns True on success."""
+        import base64
+        import json
+        from pathlib import Path
+        p = Path(path)
+        if not p.exists():
+            return False
+        try:
+            with open(p, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            store_raw = payload.get("store", {})
+            metadata = payload.get("metadata", {})
+            store: dict = {}
+            used = 0
+            for fp, b64 in store_raw.items():
+                data = base64.b64decode(b64)
+                store[fp] = data
+                used += len(data)
+            self._store = store
+            self._metadata = metadata
+            self._used_bytes = used
+            return True
+        except Exception:
+            return False

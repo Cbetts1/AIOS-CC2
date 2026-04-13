@@ -10,6 +10,7 @@ from pathlib import Path
 
 class SecurityKernel:
     _SECRET_SALT = b"AIOS-CC2-SECURITY-KERNEL-SALT-2026"
+    _LOG_ROTATE_BYTES = 10 * 1024 * 1024  # 10 MB
 
     def __init__(self):
         self._identity_data = {}
@@ -17,6 +18,31 @@ class SecurityKernel:
         self._security_log = []
         self._authenticated = False
         self._identity_path = None
+        self._log_file: Path = None
+
+    def set_log_file(self, path: str) -> None:
+        """Configure file-based security event logging.
+
+        The last 500 events from an existing log are loaded into the in-memory
+        tail so that recent history survives a restart.
+        """
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self._log_file = p
+        # Replay recent entries into in-memory log tail
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as fh:
+                    lines = fh.readlines()
+                for line in lines[-500:]:
+                    line = line.strip()
+                    if line:
+                        try:
+                            self._security_log.append(json.loads(line))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     def _resolve_identity_path(self, identity_path: str) -> Path:
         p = Path(identity_path)
@@ -82,6 +108,18 @@ class SecurityKernel:
         self._security_log.append(event)
         if len(self._security_log) > 2000:
             self._security_log = self._security_log[-1000:]
+        # Append to JSONL file if configured
+        if self._log_file is not None:
+            try:
+                # Rotate when the file exceeds the size limit
+                if (self._log_file.exists()
+                        and self._log_file.stat().st_size > self._LOG_ROTATE_BYTES):
+                    rotated = self._log_file.with_suffix(".1.jsonl")
+                    self._log_file.replace(rotated)
+                with open(self._log_file, "a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(event) + "\n")
+            except Exception:
+                pass
 
     def get_security_log(self, limit: int = 100) -> list:
         return list(self._security_log[-limit:])

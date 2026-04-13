@@ -15,6 +15,12 @@ for _p in (_root, _here):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+# Data directory: honours AIOS_DATA_DIR env var, defaults to ~/.aios
+AIOS_DATA_DIR = os.environ.get(
+    "AIOS_DATA_DIR",
+    os.path.join(os.path.expanduser("~"), ".aios"),
+)
+
 ASCII_LOGO = r"""
   ╔══════════════════════════════════════════════════════╗
   ║   ██████╗ ██╗      ██████╗  ███████╗                 ║
@@ -68,14 +74,23 @@ def boot_subsystems():
 
     print("  [2/14] PolicyEngine ...")
     policy = PolicyEngine()
+    policy.set_log_file(os.path.join(AIOS_DATA_DIR, "logs", "policy.jsonl"))
 
     print("  [3/14] SecurityKernel ...")
     security = SecurityKernel()
+    security.set_log_file(os.path.join(AIOS_DATA_DIR, "logs", "security.jsonl"))
 
     print("  [4/14] IdentityLock ...")
     identity = IdentityLock()
     identity.load()
     print(f"         Operator: {identity.get_operator()} | Level: {identity.get_level()}")
+
+    # Wire SecurityKernel — authenticate using the identity.lock file
+    try:
+        security.authenticate(str(identity._find_identity_file()))
+        print("         SecurityKernel authenticated.")
+    except Exception as _sec_exc:
+        print(f"         SecurityKernel WARNING: {_sec_exc}")
 
     print("  [5/14] MemoryMapController ...")
     memory = MemoryMapController()
@@ -94,6 +109,11 @@ def boot_subsystems():
     vnet.create_interface("mesh0")
     vsensors = VirtualSensors()
     vsensors.tick()
+
+    # Restore VirtualStorage from disk (no-op on first boot)
+    _vstorage_path = os.path.join(AIOS_DATA_DIR, "vstorage.json")
+    if vstorage.load_from_file(_vstorage_path):
+        print(f"         VirtualStorage restored from {_vstorage_path}")
 
     print("  [7/14] HostBridge ...")
     bridge = HostBridge()
@@ -122,15 +142,18 @@ def boot_subsystems():
     print("  [13/14] Sandbox ...")
     sandbox = Sandbox()
 
-    print("  [14/15] CommandCenter ...")
+    print("  [14/14] CommandCenter ...")
     cc = CommandCenter()
+    cc.set_log_file(os.path.join(AIOS_DATA_DIR, "logs", "console.jsonl"))
 
     print("  [15/15] CloudController ...")
     from aios.cloud.cloud_controller import CloudController
     from aios.cloud.cloud_loop import CloudLoop
+    from aios.cloud.cloud_api import CloudAPI
     cloud = CloudController(state_registry=state, mesh=mesh, vcpu=vcpu)
     cloud.boot()
     cloud_loop = CloudLoop(cloud_controller=cloud, mesh=mesh)
+    cloud_api = CloudAPI(cloud_controller=cloud)
 
     cc.attach(
         state=state,
@@ -152,7 +175,14 @@ def boot_subsystems():
         sandbox=sandbox,
         cloud=cloud,
     )
+    # Attach CloudAPI separately (not in MENU-driven attach loop)
+    cc._cloud_api = cloud_api
     cc.boot()
+
+    # Restore StateRegistry from disk (no-op on first boot)
+    _state_path = os.path.join(AIOS_DATA_DIR, "state_registry.json")
+    if state.load_from_file(_state_path):
+        print(f"         StateRegistry restored from {_state_path}")
 
     return {
         "state": state,
@@ -175,6 +205,8 @@ def boot_subsystems():
         "cloud": cloud,
         "cloud_loop": cloud_loop,
         "cc": cc,
+        "_vstorage_path": _vstorage_path,
+        "_state_path": _state_path,
     }
 
 
@@ -192,6 +224,27 @@ def start_web_server(cc, port):
     return srv
 
 
+def _watchdog_restart(name: str, subsystems: dict) -> None:
+    """Attempt to restart a subsystem that has been unhealthy too long."""
+    try:
+        comp = subsystems.get(name)
+        if comp is None:
+            return
+        if hasattr(comp, "boot"):
+            comp.boot()
+        elif hasattr(comp, "start"):
+            comp.start()
+        # Log the watchdog action through SecurityKernel if available
+        cc = subsystems.get("cc")
+        if cc and getattr(cc, "_security", None):
+            cc._security.log_security_event({
+                "type": "WATCHDOG_RESTART",
+                "component": name,
+            })
+    except Exception:
+        pass
+
+
 def endless_loop(subsystems, stop_event):
     """The main endless loop: tick all engines, heartbeat, update state."""
     cc = subsystems["cc"]
@@ -203,9 +256,14 @@ def endless_loop(subsystems, stop_event):
     state = subsystems["state"]
     heartbeat = subsystems["heartbeat"]
     cloud = subsystems.get("cloud")
+    state_path = subsystems.get("_state_path", "")
+    vstorage_path = subsystems.get("_vstorage_path", "")
+    vstorage = subsystems["vstorage"]
 
     tick = 0
     last_heartbeat = 0
+    _unhealthy_counts: dict = {}
+    WATCHDOG_THRESHOLD = 3
 
     while not stop_event.is_set():
         tick += 1
@@ -255,17 +313,67 @@ def endless_loop(subsystems, stop_event):
             except Exception:
                 pass
 
+        # Flush StateRegistry to disk every 60 ticks (≈ 60 s)
+        if tick % 60 == 0 and state_path:
+            try:
+                state.flush_to_file(state_path)
+            except Exception:
+                pass
+
+        # Watchdog: inspect subsystem health every 30 ticks (≈ 30 s)
+        if tick % 30 == 0:
+            try:
+                full_status = cc.get_status_dict()
+                for comp_name, comp_status in full_status.items():
+                    if not isinstance(comp_status, dict):
+                        continue
+                    if "healthy" not in comp_status:
+                        continue
+                    if not comp_status.get("healthy", True):
+                        _unhealthy_counts[comp_name] = _unhealthy_counts.get(comp_name, 0) + 1
+                        if _unhealthy_counts[comp_name] >= WATCHDOG_THRESHOLD:
+                            _watchdog_restart(comp_name, subsystems)
+                            _unhealthy_counts[comp_name] = 0
+                    else:
+                        _unhealthy_counts[comp_name] = 0
+            except Exception:
+                pass
+
         if not cc._running:
             stop_event.set()
             break
 
         time.sleep(1.0)
 
+    # Persist state on clean exit
+    if state_path:
+        try:
+            state.flush_to_file(state_path)
+        except Exception:
+            pass
+    if vstorage_path:
+        try:
+            vstorage.save_to_file(vstorage_path)
+        except Exception:
+            pass
+
 
 def run_async_mesh(subsystems):
-    """Start mesh and heartbeat in an asyncio loop."""
+    """Start mesh and heartbeat in an asyncio loop.
+
+    Also registers the heartbeat coroutine with ProcessSupervisor so the
+    supervisor tracks and can restart it on failure.
+    """
     async def _run():
         heartbeat = subsystems["heartbeat"]
+        supervisor = subsystems["supervisor"]
+        # Register the heartbeat with ProcessSupervisor for tracking
+        try:
+            supervisor.register("heartbeat", heartbeat._run)
+            await supervisor.start_all()
+        except Exception:
+            pass
+        # Also start via the HeartbeatSystem's own method (both paths work)
         heartbeat.start()
         while subsystems["cc"]._running:
             await asyncio.sleep(1)
