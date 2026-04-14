@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aios.core.log_util import rotate_and_append
+
 
 class SecurityKernel:
     _SECRET_SALT = b"AIOS-CC2-SECURITY-KERNEL-SALT-2026"
@@ -110,17 +112,7 @@ class SecurityKernel:
             self._security_log = self._security_log[-1000:]
         # Append to JSONL file if configured
         if self._log_file is not None:
-            try:
-                # Single-generation rotation (rename to .1.jsonl when exceeding size).
-                # TODO: upgrade to logging.handlers.RotatingFileHandler for multi-gen rotation.
-                if (self._log_file.exists()
-                        and self._log_file.stat().st_size > self._LOG_ROTATE_BYTES):
-                    rotated = self._log_file.with_suffix(".1.jsonl")
-                    self._log_file.replace(rotated)
-                with open(self._log_file, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps(event) + "\n")
-            except Exception:
-                pass
+            rotate_and_append(self._log_file, event, self._LOG_ROTATE_BYTES)
 
     def get_security_log(self, limit: int = 100) -> list:
         return list(self._security_log[-limit:])

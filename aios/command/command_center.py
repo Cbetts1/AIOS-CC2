@@ -5,6 +5,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aios.core.log_util import rotate_and_append
+
 
 class CommandCenter:
     VERSION = "2.0.0-CC2"
@@ -214,16 +216,7 @@ class CommandCenter:
             self._console_log = self._console_log[-250:]
         # Append to JSONL file if configured
         if self._log_file is not None:
-            try:
-                # Single-generation rotation.
-                # TODO: upgrade to logging.handlers.RotatingFileHandler for multi-gen rotation.
-                if (self._log_file.exists()
-                        and self._log_file.stat().st_size > self._log_rotate_bytes):
-                    self._log_file.replace(self._log_file.with_suffix(".1.jsonl"))
-                with open(self._log_file, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps(entry) + "\n")
-            except Exception:
-                pass
+            rotate_and_append(self._log_file, entry, self._log_rotate_bytes)
 
     def get_banner(self) -> str:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -747,8 +740,9 @@ class CommandCenter:
         elif top == "16":
             if sub == "1":
                 lines.append("  Graceful shutdown requires admin password.")
-                lines.append("  Use: cc.shutdown('7212') in Python, or")
-                lines.append("  run: python aios/main.py --operator-token 7212")
+                lines.append("  Use: cc.shutdown('<token>') in Python, or")
+                lines.append("  run: python aios/main.py --operator-token <token>")
+                lines.append("  Token is set via the AIOS_OPERATOR_TOKEN env var.")
             elif sub == "2":
                 lines.append("  EMERGENCY HALT — operator authentication required.")
                 lines.append("  This will terminate all subsystems immediately.")

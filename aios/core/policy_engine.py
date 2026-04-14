@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aios.core.log_util import rotate_and_append
+
 
 class PolicyViolation(Exception):
     """Raised when a policy check fails."""
@@ -103,16 +105,7 @@ class PolicyEngine:
             self._audit_log = self._audit_log[-500:]
         # Append to JSONL file if configured
         if self._log_file is not None:
-            try:
-                # Single-generation rotation.
-                # TODO: upgrade to logging.handlers.RotatingFileHandler for multi-gen rotation.
-                if (self._log_file.exists()
-                        and self._log_file.stat().st_size > self._LOG_ROTATE_BYTES):
-                    self._log_file.replace(self._log_file.with_suffix(".1.jsonl"))
-                with open(self._log_file, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps(event) + "\n")
-            except Exception:
-                pass
+            rotate_and_append(self._log_file, event, self._LOG_ROTATE_BYTES)
         if not allowed:
             required = self._custom_policies.get(
                 action, self.ACTION_POLICY.get(action, self.OPERATOR_ONLY)

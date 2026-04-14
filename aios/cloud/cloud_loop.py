@@ -9,6 +9,7 @@ This module runs in its own daemon thread and performs four duties every tick:
 
 The loop only stops when stop() is called (e.g. during operator shutdown).
 """
+import asyncio
 import threading
 import time
 from datetime import datetime, timezone

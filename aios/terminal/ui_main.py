@@ -4,6 +4,10 @@ import time
 import threading
 from datetime import datetime
 
+from aios.terminal.panels.system_panel import SystemPanel
+from aios.terminal.panels.engine_panel import EnginePanel
+from aios.terminal.panels.network_panel import NetworkPanel
+
 
 class TerminalUI:
     def __init__(self, command_center=None):
@@ -18,6 +22,16 @@ class TerminalUI:
         # Command history: list of previously submitted commands
         self._history: list = []
         self._history_pos: int = -1   # -1 = not browsing history
+        # Status panels (used for startup overview and periodic refresh)
+        self._system_panel = SystemPanel(command_center=command_center)
+        self._engine_panel = EnginePanel(
+            aura_engine=getattr(command_center, "_aura", None) if command_center else None
+        )
+        self._network_panel = NetworkPanel(
+            vnetwork=getattr(command_center, "_vnet", None) if command_center else None,
+            mesh=getattr(command_center, "_mesh", None) if command_center else None,
+            heartbeat=getattr(command_center, "_heartbeat", None) if command_center else None,
+        )
         self._menu_items = [
             ("1", "System Status"),
             ("2", "Layer Control"),
@@ -220,7 +234,9 @@ class TerminalUI:
         return True
 
     def _ticker(self) -> None:
+        cycle = 0
         while self._running:
+            cycle += 1
             if self._cc:
                 hb = self._cc._heartbeat
                 if hb:
@@ -228,16 +244,34 @@ class TerminalUI:
                     count = beat.get("beat_count", 0)
                     with self._lock:
                         self._status_msg = f"HB#{count} | type 'help' for commands"
+            # Every 6 cycles (≈ 30 s) append a fresh network snapshot to console
+            if cycle % 6 == 0 and self._cc:
+                try:
+                    self._network_panel._vnet = getattr(self._cc, "_vnet", None)
+                    self._network_panel._mesh = getattr(self._cc, "_mesh", None)
+                    self._network_panel._hb = getattr(self._cc, "_heartbeat", None)
+                    net_lines = self._network_panel.render_text().split("\n")
+                    with self._lock:
+                        for line in net_lines:
+                            self._console_lines.append(line)
+                        if len(self._console_lines) > 300:
+                            self._console_lines = self._console_lines[-150:]
+                except Exception:
+                    pass
             time.sleep(5)
 
     def start(self) -> None:
         self._running = True
         ticker = threading.Thread(target=self._ticker, daemon=True)
         ticker.start()
+        # Populate the console with the boot log, followed by a live system
+        # overview rendered from the status panels.
         if self._cc:
             log = self._cc.get_console_log(limit=20)
             with self._lock:
                 self._console_lines = [e["msg"] for e in log]
+                for line in self._system_panel.render_text().split("\n"):
+                    self._console_lines.append(line)
         try:
             curses.wrapper(self._curses_main)
         finally:

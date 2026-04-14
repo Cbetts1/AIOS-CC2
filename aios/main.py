@@ -290,7 +290,6 @@ def endless_loop(subsystems, stop_event):
     proc_writers = subsystems["proc_writers"]
     state = subsystems["state"]
     heartbeat = subsystems["heartbeat"]
-    cloud = subsystems.get("cloud")
     state_path = subsystems.get("_state_path", "")
     vstorage_path = subsystems.get("_vstorage_path", "")
     vstorage = subsystems["vstorage"]
@@ -326,12 +325,6 @@ def endless_loop(subsystems, stop_event):
 
         try:
             proc_writers.tick()
-        except Exception:
-            pass
-
-        try:
-            if cloud and cloud._running:
-                cloud.tick()
         except Exception:
             pass
 

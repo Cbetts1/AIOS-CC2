@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""AI-OS Terminal Entry Point - Boots AI-OS and launches terminal UI."""
+"""AI-OS Terminal Entry Point - Boots AI-OS and launches terminal UI.
+
+.. deprecated::
+    This module is superseded by ``aios/main.py``.  Use::
+
+        python aios/main.py --ui terminal
+
+    ``start_terminal.py`` boots a reduced subset of subsystems (no cloud,
+    no ProcessSupervisor, no VirtualStorage persistence) and is kept only
+    for backward compatibility.  It may be removed in a future release.
+"""
 import os
 import sys
 
