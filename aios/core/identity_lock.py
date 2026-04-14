@@ -1,6 +1,7 @@
 """AI-OS Identity Lock - Operator identity enforcement."""
 import hashlib
 import json
+import os
 from pathlib import Path
 
 
@@ -56,7 +57,15 @@ class IdentityLock:
         return token == expected
 
     def _make_operator_token(self) -> str:
-        return "7212"
+        """Return the operator token.
+
+        The value is taken from the ``AIOS_OPERATOR_TOKEN`` environment
+        variable when set, which lets operators change it without editing
+        source code.  The built-in default (``"7212"``) is kept for
+        backward compatibility but should be overridden in production via
+        the environment variable.
+        """
+        return os.environ.get("AIOS_OPERATOR_TOKEN", "7212")
 
     def get_operator_token(self) -> str:
         if not self._loaded:

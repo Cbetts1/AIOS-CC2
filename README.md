@@ -186,12 +186,15 @@ export AIOS_PORT=8080
 bash start.sh web
 ```
 
-To generate your operator token:
-```python
-import hashlib
-raw = "Chris-2026-04-13T08:39:00Z".encode()
-print(hashlib.sha256(raw).hexdigest())
+To set your operator token (used for shutdown and web API auth):
+```bash
+# Override the default token with your own secret:
+export AIOS_OPERATOR_TOKEN=my-secret-token
+python aios/main.py --ui web
 ```
+
+The default token is `7212` when `AIOS_OPERATOR_TOKEN` is not set.  
+Set the env var before launching to harden the system for any non-local use.
 
 To launch with persistent trace logging:
 ```bash
@@ -235,6 +238,34 @@ python health_check.py --json
 
 Expected output:
 ```
+  ========================================================
+  AI-OS CC2 — Health Check Results
+  ========================================================
+  ✓  state
+  ✓  policy
+  ✓  security
+  ✓  identity
+  ✓  memory
+  ✓  vcpu
+  ✓  vmem
+  ✓  vstorage
+  ✓  vnet
+  ✓  vsensors
+  ✓  bridge
+  ✓  mesh
+  ✓  aura
+  ✓  cloud
+  ✓  heartbeat
+  ✓  command_routing  (7/7 commands OK)
+  ✓  api_status_dict
+  --------------------------------------------------------
+  Result : PASS
+  Passed : 17/17
+  ========================================================
+```
+
+---
+
 ## Frequently Asked Questions
 
 **Q: Nothing happens when I run it on Windows.**
